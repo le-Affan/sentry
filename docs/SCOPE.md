@@ -103,11 +103,21 @@ Event count is capped at 12 rows to hold the token budget.
 ### 2.7 Token budget
 
 Hard constraint: **the rendered blob must fit in ~700 tokens.** The dataset builder
-truncates to satisfy this in fixed priority order — drop `analyst_notes` first, then
-trim event `description` fields to 20 words, then drop the lowest-`criticality` assets
-not referenced by any event, then drop events from the middle of the timeline (never
-the first or last two). Any blob still over budget after these passes is discarded
-from the dataset rather than silently clipped.
+truncates to satisfy this in fixed priority order, cheapest loss first:
+
+1. Trim event `description` fields to 20 words.
+2. Drop EVENTS rows, oldest-but-one first — always keep `seq 1` (initial access) and
+   the final `alert` row (detection outcome), and work inward from the second-oldest.
+3. Drop `detections` entries from ENRICHMENT, least-specific first.
+4. Drop asset rows, lowest `criticality` first, and only assets not referenced by any
+   surviving event.
+5. Drop `analyst_notes` — **last resort only.**
+
+`analyst_notes` is dropped last because it is usually the only field that makes
+`## Root Cause` derivable; losing it forces the "insufficient evidence" fallback in
+§3.5. A blob that needs step 5 to fit is flagged `truncated_to_notes = True` so the
+share of such records is visible at dataset-build time. Any blob still over budget
+after all five passes is discarded rather than silently clipped.
 
 ### 2.8 Worked input example
 
@@ -151,6 +161,47 @@ external_ips: 203.0.113.44
 analyst_notes: Attachment macro was not blocked; workstation macro policy set to prompt-user.
 === END ===
 ```
+
+
+### 2.9 Field provenance
+
+Where each input field actually comes from. Marks: **VCDB** (direct from a VERIS
+record), **DERIVED** (computed or mapped from VCDB fields), **SYNTHETIC** (invented by
+our templating code).
+
+| Block | Field | Provenance | Note |
+|---|---|---|---|
+| metadata | `incident_id` | **VCDB** | VERIS `incident_id` (UUID); reformatted to `INC-YYYY-NNNN` for readability |
+| metadata | `detected_at` | **DERIVED** | Date from `timeline.incident` (43.4% have day-level; 28.9% month-only, 27.7% year-only). Time-of-day is synthetic — only 10/10,596 records carry a clock time |
+| metadata | `reporting_tool` | **SYNTHETIC** | Not in VERIS; sampled from a fixed tool list |
+| metadata | `org_industry` | **VCDB** | `victim.industry` (NAICS), 100% present; mapped NAICS → label |
+| metadata | `org_size` | **DERIVED** | `victim.employee_count` is a band (`Over 100000`); 72.8% informative. Rendered as a point value sampled inside the band |
+| metadata | `data_sensitivity` | **DERIVED** | From `attribute.confidentiality.data[].variety` (e.g. Medical → `PHI`, Payment → `PCI`) |
+| ASSETS | `asset_id` | **SYNTHETIC** | Sequence number assigned at render time |
+| ASSETS | `hostname` | **SYNTHETIC** | VERIS has no named machines. 3/10,596 records contain anything hostname-shaped |
+| ASSETS | `role` | **DERIVED** | `asset.assets[].variety` (88 values, e.g. `S - Database`) mapped to our role enum |
+| ASSETS | `os` | **SYNTHETIC** | Not in VERIS; sampled consistently with the mapped role |
+| ASSETS | `criticality` | **DERIVED** | From asset variety class (`S -` server, `U -` user device) plus `data_sensitivity` |
+| ASSETS | `ip` | **SYNTHETIC** | 4/10,596 records contain an IPv4, all incidental mentions in free text |
+| ACCOUNTS | `account` | **SYNTHETIC** | VERIS names no accounts |
+| ACCOUNTS | `type` | **DERIVED** | From `actor.{internal,external,partner}` and `actor.*.variety` |
+| ACCOUNTS | `privilege` | **DERIVED** | From `action.misuse.variety` / `actor.internal.variety` (e.g. `Privilege abuse`, `System admin`) |
+| EVENTS | `seq` | **SYNTHETIC** | Ordering is our construction |
+| EVENTS | `timestamp` | **SYNTHETIC** | Anchored to the VCDB incident date, but per-event offsets are invented. Spacing constrained by `timeline.{compromise,exfiltration,discovery}.unit` where present (11–26% of records) |
+| EVENTS | `src_ip` / `dst_ip` | **SYNTHETIC** | See ASSETS `ip` |
+| EVENTS | `src_host` / `dst_host` | **SYNTHETIC** | See ASSETS `hostname` |
+| EVENTS | `event_type` | **DERIVED** | Chain skeleton selected by `action.*.variety`; the individual row assignment is ours |
+| EVENTS | `description` | **SYNTHETIC** | Templated text. Wording may draw on `summary`, but no VERIS field contains event descriptions |
+| ENRICHMENT | `detections` | **SYNTHETIC** | Rule names invented; loosely informed by `discovery_method` |
+| ENRICHMENT | `ioc_hashes` | **SYNTHETIC** | 6/10,596 records contain a hash, all incidental |
+| ENRICHMENT | `external_ips` | **SYNTHETIC** | See ASSETS `ip` |
+| ENRICHMENT | `analyst_notes` | **DERIVED** | Condensed from VERIS `summary` (95.1% present, median 24 words) plus `action.*.vector` and `control_failure` where present. The one field carrying real human narrative |
+
+**Tally: 6 VCDB/DERIVED-from-real-facts in metadata, 4 DERIVED in ASSETS/ACCOUNTS, and
+effectively the entire EVENTS block synthetic.** See `docs/DATA_SURVEY.md` §3 for the
+measurements behind each mark, and §3.3 for why the shipped VERIS→ATT&CK crosswalk
+cannot supply ground-truth technique labels.
+
 
 ---
 
