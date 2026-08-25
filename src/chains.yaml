@@ -1,0 +1,531 @@
+# =============================================================================
+# Event-chain skeletons
+# =============================================================================
+#
+# Implements docs/TEMPLATING_DESIGN.md sections 2-5. This file is DATA. The
+# templater reads it; it contains no logic.
+#
+# The problem these exist to solve (TEMPLATING_DESIGN.md section 1): event rows and
+# the technique label are both derived from action.variety, so one fixed chain per
+# technique lets the model recognise a skeleton and emit the matching technique
+# without reading the telemetry. Three or more structurally distinct chains per
+# technique, a shared event-type vocabulary, noise, and order randomisation are the
+# countermeasures.
+#
+# Schema
+# ------
+# skeletons:
+#   - id:         unique slug
+#     technique:  ATT&CK ID this chain belongs to
+#     name:       human label
+#     nodes:      ordered list; each has
+#                   ref:         node id, unique within the skeleton
+#                   event_type:  value from the SCOPE.md 2.5 enum
+#                   desc:        description template; {placeholders} filled by
+#                                the templater from the record's synthesized entities
+#                   terminal:    true on the final detection alert (always emitted last)
+#     edges:      [from_ref, to_ref] pairs meaning `from` must precede `to`.
+#                 Anything not constrained here is free to move -- the templater
+#                 emits a random valid topological sort.
+#     noise:      how many benign events may be inserted (min, max)
+#     notes:      analyst_notes text for this chain -- the control failure or
+#                 contributing factor THIS chain implies. Synthetic, and
+#                 deliberately so: the VCDB summary describes a different
+#                 incident than the events, which left Root Cause underivable.
+#                 Same {placeholders} as `desc`.
+#
+# Placeholders available to `desc`:
+#   {wks} {srv} {dc} {web}  hostnames by role      {user} {svc}   account names
+#   {int_ip} {ext_ip}       addresses              {path} {file}  filesystem
+#   {hash}                  IOC                    {n_files} {gb} {port} quantities
+#   {domain}                external domain
+# =============================================================================
+
+version: 1
+
+# ---------------------------------------------------------------------------
+# Benign noise pool -- shared across every skeleton (TEMPLATING_DESIGN.md 4).
+# None of these indicate compromise. They break length-as-signal and force the
+# report to select rather than transcribe.
+# ---------------------------------------------------------------------------
+noise_pool:
+  - event_type: auth_success
+    desc: "Scheduled logon by {svc} on {srv} for nightly backup job"
+  - event_type: service_install
+    desc: "Patch management agent installed update package KB{port} on {wks}"
+  - event_type: dns_query
+    desc: "Lookup for {domain} from {wks} resolved normally"
+  - event_type: net_connection
+    desc: "Routine HTTPS to internal update server from {wks} on port 443"
+  - event_type: file_read
+    desc: "{user} opened {n_files} files from their home directory on {wks}"
+  - event_type: auth_failure
+    desc: "Single failed logon for {user} on {wks}, succeeded on retry"
+  - event_type: alert
+    desc: "Endpoint agent flagged {file} on {wks}; dispositioned benign by analyst"
+  - event_type: process_create
+    desc: "Software inventory scanner ran on {srv} under {svc}"
+  - event_type: registry_write
+    desc: "Group policy applied a printer configuration change on {wks}"
+
+skeletons:
+
+  # =========================================================================
+  # T1486 -- Data Encrypted for Impact
+  # =========================================================================
+  - id: t1486_phish_to_encrypt
+    technique: T1486
+    name: Phish-to-encrypt
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Inbound message with attachment {file} delivered to {user} from {domain}"}
+      - {ref: exec, event_type: process_create, desc: "Office application spawned powershell.exe with encoded command on {wks}"}
+      - {ref: c2, event_type: net_connection, desc: "Outbound HTTPS from powershell.exe on {wks} to {ext_ip} on port {port}"}
+      - {ref: drop, event_type: file_write, desc: "powershell.exe wrote {path} on {wks}, hash {hash}"}
+      - {ref: persist, event_type: service_install, desc: "New service created on {wks} pointing to {path}"}
+      - {ref: encrypt, event_type: file_write, desc: "{n_files} files rewritten with appended extension on {srv} in under four minutes"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Mass file modification rule fired on {srv}"}
+    edges: [[mail, exec], [exec, c2], [exec, drop], [drop, persist], [persist, encrypt], [encrypt, detect]]
+    noise: [1, 2]
+    notes: "Macro policy on {wks} was set to prompt-user rather than block, so the attachment ran on open."
+
+  - id: t1486_edge_exploit_to_encrypt
+    technique: T1486
+    name: Edge-exploit-to-encrypt
+    nodes:
+      - {ref: probe, event_type: alert, desc: "Perimeter IDS flagged anomalous request pattern against {web} from {ext_ip}"}
+      - {ref: exploit, event_type: net_connection, desc: "Crafted request to {web} from {ext_ip} returned an unexpected 200 on port {port}"}
+      - {ref: shell, event_type: process_create, desc: "Web service account spawned a command interpreter on {web}"}
+      - {ref: cred, event_type: auth_success, desc: "{svc} authenticated from {web} to {srv} over SMB"}
+      - {ref: lateral, event_type: net_connection, desc: "Session from {web} to {srv} on port 445 outside normal pattern"}
+      - {ref: encrypt, event_type: file_write, desc: "{n_files} files rewritten across shares on {srv}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Bulk file modification detected on {srv}"}
+    edges: [[probe, exploit], [exploit, shell], [shell, cred], [cred, lateral], [lateral, encrypt], [encrypt, detect]]
+    noise: [1, 2]
+    notes: "{web} was two patch cycles behind; the service account it runs under also had write access to {srv}."
+
+  - id: t1486_slow_burn
+    technique: T1486
+    name: Slow-burn ransomware
+    nodes:
+      - {ref: vpn, event_type: auth_success, desc: "{user} authenticated to the VPN gateway from {ext_ip}"}
+      - {ref: dns, event_type: dns_query, desc: "{wks} resolved {domain}, first observation in the environment"}
+      - {ref: exec, event_type: process_create, desc: "Unsigned binary {file} executed on {wks} under {user}"}
+      - {ref: reg, event_type: registry_write, desc: "Run key added on {wks} referencing {path}"}
+      - {ref: persist, event_type: service_install, desc: "Service installed on {srv} pointing to {path}, {days} days after initial access"}
+      - {ref: encrypt, event_type: file_write, desc: "{n_files} files encrypted across {srv} and mapped shares"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Ransom note file detected on {srv} by content inspection"}
+    edges: [[vpn, exec], [dns, exec], [exec, reg], [reg, persist], [persist, encrypt], [encrypt, detect]]
+    noise: [1, 2]
+    notes: "VPN access for {user} was not covered by MFA, and the dwell time went unnoticed because no baseline existed for new outbound domains."
+
+  - id: t1486_backup_first
+    technique: T1486
+    name: Backup-first
+    nodes:
+      - {ref: login, event_type: auth_success, desc: "{svc} logged on interactively to {srv}, which is unusual for this account"}
+      - {ref: exec, event_type: process_create, desc: "Archive utility launched from {path} on {srv}"}
+      - {ref: enum, event_type: file_read, desc: "Backup catalogue on {srv} enumerated, {n_files} entries listed"}
+      - {ref: destroy, event_type: file_write, desc: "Shadow copies and {n_files} backup sets deleted on {srv}"}
+      - {ref: encrypt, event_type: file_write, desc: "{n_files} production files rewritten on {srv}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Backup integrity check failed on {srv}, followed by mass modification alert"}
+    edges: [[login, exec], [exec, enum], [enum, destroy], [destroy, encrypt], [encrypt, detect]]
+    noise: [1, 2]
+    notes: "{svc} held local admin on both {srv} and the backup catalogue, so one credential reached production and its backups."
+
+  # =========================================================================
+  # T1566 -- Phishing
+  # =========================================================================
+  - id: t1566_attachment_macro
+    technique: T1566
+    name: Attachment macro
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Message with attachment {file} delivered to {user} from {domain}"}
+      - {ref: exec, event_type: process_create, desc: "Macro in {file} launched a script interpreter on {wks}"}
+      - {ref: c2, event_type: net_connection, desc: "Outbound connection from {wks} to {ext_ip} on port {port}"}
+      - {ref: drop, event_type: file_write, desc: "{path} written on {wks}, hash {hash}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Suspicious Office child process rule fired on {wks}"}
+    edges: [[mail, exec], [exec, c2], [exec, drop], [drop, detect]]
+    noise: [1, 2]
+    notes: "Attachments from external senders are not detonated in a sandbox before delivery."
+
+  - id: t1566_credential_harvest
+    technique: T1566
+    name: Credential harvest page
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Message containing a link to {domain} delivered to {user}"}
+      - {ref: dns, event_type: dns_query, desc: "{wks} resolved {domain}, registered within the last week"}
+      - {ref: visit, event_type: net_connection, desc: "{wks} loaded a page on {domain} over HTTPS"}
+      - {ref: reuse, event_type: auth_success, desc: "{user} authenticated to the mail portal from {ext_ip}, a previously unseen location"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Impossible-travel rule fired for {user}"}
+    edges: [[mail, dns], [dns, visit], [visit, reuse], [reuse, detect]]
+    noise: [1, 2]
+    notes: "Mail filtering does not rewrite links, so the newly registered domain was reachable from {wks}."
+
+  - id: t1566_reported_not_clicked
+    technique: T1566
+    name: Reported, not clicked
+    nodes:
+      - {ref: mail1, event_type: email_delivery, desc: "Message with attachment {file} delivered to {user} from {domain}"}
+      - {ref: report, event_type: alert, desc: "{user} reported the message to the security team without opening it"}
+      - {ref: mail2, event_type: email_delivery, desc: "Second wave from {domain} delivered to {n_files} additional recipients"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Mail gateway retro-quarantined all messages from {domain}"}
+    edges: [[mail1, report], [report, mail2], [mail2, detect]]
+    noise: [1, 2]
+    notes: "The user reported promptly, but the gateway had no rule to retro-quarantine already-delivered copies until an analyst acted."
+
+  - id: t1566_thread_hijack
+    technique: T1566
+    name: Thread hijack
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Reply in an existing thread from a compromised partner address delivered to {user}"}
+      - {ref: exec, event_type: process_create, desc: "Attachment {file} opened on {wks}, spawning a script interpreter"}
+      - {ref: fail, event_type: auth_failure, desc: "Credential prompt on {wks} rejected {user} twice"}
+      - {ref: ok, event_type: auth_success, desc: "{user} authenticated on {wks} on the third attempt"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Anomalous authentication sequence flagged for {user}"}
+    edges: [[mail, exec], [exec, fail], [fail, ok], [ok, detect]]
+    noise: [1, 2]
+    notes: "Replies from known partner addresses skip attachment scanning, which the hijacked thread exploited."
+
+  # =========================================================================
+  # T1190 -- Exploit Public-Facing Application
+  # =========================================================================
+  - id: t1190_web_shell
+    technique: T1190
+    name: Web shell
+    nodes:
+      - {ref: req, event_type: net_connection, desc: "Malformed request to {web} from {ext_ip} on port {port}"}
+      - {ref: write, event_type: file_write, desc: "{path} written into the web root on {web}, hash {hash}"}
+      - {ref: exec, event_type: process_create, desc: "Web service account spawned a shell on {web}"}
+      - {ref: beacon, event_type: net_connection, desc: "{web} initiated outbound HTTPS to {ext_ip}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Web shell signature matched {path} on {web}"}
+    edges: [[req, write], [write, exec], [exec, beacon], [beacon, detect]]
+    noise: [1, 2]
+    notes: "The web root on {web} is writable by the service account, so an upload became a persistent shell."
+
+  - id: t1190_injection_to_read
+    technique: T1190
+    name: Injection to data read
+    nodes:
+      - {ref: probe, event_type: net_connection, desc: "Parameterised requests to {web} from {ext_ip} containing SQL syntax"}
+      - {ref: waf, event_type: alert, desc: "Web application firewall blocked {n_files} requests from {ext_ip}"}
+      - {ref: bypass, event_type: net_connection, desc: "Encoded request to {web} from {ext_ip} returned a large response body"}
+      - {ref: read, event_type: file_read, desc: "{n_files} rows exported from the application database on {srv}"}
+      - {ref: exfil, event_type: data_transfer, desc: "{gb} GB transferred from {web} to {ext_ip}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Outbound volume anomaly flagged on {web}"}
+    edges: [[probe, waf], [waf, bypass], [bypass, read], [read, exfil], [exfil, detect]]
+    noise: [1, 2]
+    notes: "The WAF was in monitor-only mode for encoded payloads, and the application account could read the full table rather than a scoped view."
+
+  - id: t1190_exploit_to_lateral
+    technique: T1190
+    name: Exploit to lateral
+    nodes:
+      - {ref: exploit, event_type: net_connection, desc: "Exploit attempt against an unpatched service on {web} from {ext_ip}"}
+      - {ref: exec, event_type: process_create, desc: "Unexpected child process under the service account on {web}"}
+      - {ref: auth, event_type: auth_success, desc: "{svc} authenticated from {web} to {srv}"}
+      - {ref: move, event_type: net_connection, desc: "SMB session from {web} to {srv} on port 445"}
+      - {ref: fail, event_type: auth_failure, desc: "{n_files} failed logons for {svc} against {dc}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Lateral movement rule fired on {srv}"}
+    edges: [[exploit, exec], [exec, auth], [auth, move], [move, fail], [fail, detect]]
+    noise: [1, 2]
+    notes: "{web} sits in the same flat segment as {srv}; no east-west filtering existed between the DMZ and internal servers."
+
+  - id: t1190_scanned_then_hit
+    technique: T1190
+    name: Scanned then hit
+    nodes:
+      - {ref: scan1, event_type: net_connection, desc: "Sequential port probes against {web} from {ext_ip}"}
+      - {ref: scan2, event_type: net_connection, desc: "Version fingerprinting requests to {web} from {ext_ip}"}
+      - {ref: hit, event_type: net_connection, desc: "Request matching a known exploit signature delivered to {web} on port {port}"}
+      - {ref: exec, event_type: process_create, desc: "Process {file} started on {web} outside the deployment window"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Exploit signature matched against {web}"}
+    edges: [[scan1, hit], [scan2, hit], [hit, exec], [exec, detect]]
+    noise: [1, 2]
+    notes: "Perimeter scanning against {web} generated alerts for days without triage, so the exploit followed an ignored warning."
+
+  # =========================================================================
+  # T1078 -- Valid Accounts
+  # =========================================================================
+  - id: t1078_impossible_travel
+    technique: T1078
+    name: Impossible travel
+    nodes:
+      - {ref: far, event_type: auth_success, desc: "{user} authenticated from {ext_ip}, geolocated outside any office region"}
+      - {ref: near, event_type: auth_success, desc: "{user} authenticated to {srv} from {int_ip} minutes later"}
+      - {ref: read, event_type: file_read, desc: "{n_files} files read from a restricted share on {srv} by {user}"}
+      - {ref: exfil, event_type: data_transfer, desc: "{gb} GB uploaded from {srv} to {ext_ip}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Data loss prevention rule flagged egress from {srv}"}
+    edges: [[far, near], [near, read], [read, exfil], [exfil, detect]]
+    noise: [1, 2]
+    notes: "Conditional access allows logon from any geography, and {user} reused a password exposed in an unrelated breach."
+
+  - id: t1078_service_account_abuse
+    technique: T1078
+    name: Service account abuse
+    nodes:
+      - {ref: login, event_type: auth_success, desc: "{svc} logged on interactively to {srv}; this account is configured for batch use only"}
+      - {ref: conn, event_type: net_connection, desc: "{srv} opened an outbound session to {ext_ip} on port {port}"}
+      - {ref: read, event_type: file_read, desc: "{n_files} files read from {srv} under {svc}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Service account interactive logon rule fired on {srv}"}
+    edges: [[login, conn], [login, read], [read, detect]]
+    noise: [1, 2]
+    notes: "{svc} was configured for batch use but never denied interactive logon rights."
+
+  - id: t1078_dormant_revival
+    technique: T1078
+    name: Dormant account revival
+    nodes:
+      - {ref: wake, event_type: auth_success, desc: "{user} authenticated on {wks} after {days} days of inactivity"}
+      - {ref: reg, event_type: registry_write, desc: "Persistence key written on {wks} referencing {path}"}
+      - {ref: second, event_type: auth_success, desc: "{user} authenticated to {srv} from {int_ip}"}
+      - {ref: read, event_type: file_read, desc: "{n_files} documents accessed on {srv}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Dormant account activity rule fired for {user}"}
+    edges: [[wake, reg], [wake, second], [second, read], [read, detect]]
+    noise: [1, 2]
+    notes: "The joiner-mover-leaver process does not disable accounts after inactivity, leaving {user} live and unmonitored."
+
+  - id: t1078_stuffing_survivor
+    technique: T1078
+    name: Credential stuffing survivor
+    nodes:
+      - {ref: fail, event_type: auth_failure, desc: "{n_files} failed logons across multiple accounts from {ext_ip}"}
+      - {ref: ok, event_type: auth_success, desc: "{user} authenticated successfully from {ext_ip}"}
+      - {ref: pivot, event_type: auth_success, desc: "{user} authenticated to {srv} from {int_ip}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Successful logon following a failure burst flagged for {user}"}
+    edges: [[fail, ok], [ok, pivot], [pivot, detect]]
+    noise: [1, 2]
+    notes: "No rate limiting on the external logon endpoint, and {user} had no second factor."
+
+  # =========================================================================
+  # T1498 -- Network Denial of Service
+  # =========================================================================
+  - id: t1498_volumetric
+    technique: T1498
+    name: Volumetric flood
+    nodes:
+      - {ref: spike, event_type: net_connection, desc: "Inbound traffic to {web} rose to {gb} Gbps from distributed sources"}
+      - {ref: alert1, event_type: alert, desc: "Bandwidth threshold exceeded on the perimeter link"}
+      - {ref: sustain, event_type: net_connection, desc: "Flood against {web} sustained for {days} hours"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "{web} marked unavailable by external monitoring"}
+    edges: [[spike, alert1], [alert1, sustain], [sustain, detect]]
+    noise: [1, 2]
+    notes: "No upstream scrubbing arrangement with the provider, so link saturation could not be mitigated in-path."
+
+  - id: t1498_application_layer
+    technique: T1498
+    name: Application-layer exhaustion
+    nodes:
+      - {ref: reqs, event_type: net_connection, desc: "{n_files} requests per minute to a single expensive endpoint on {web} from {ext_ip}"}
+      - {ref: latency, event_type: alert, desc: "Response latency on {web} exceeded its service objective"}
+      - {ref: pool, event_type: alert, desc: "Connection pool on {srv} exhausted"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "{web} health check failing continuously"}
+    edges: [[reqs, latency], [latency, pool], [pool, detect]]
+    noise: [1, 2]
+    notes: "The expensive endpoint on {web} has no per-client rate limit or caching layer."
+
+  - id: t1498_dos_as_cover
+    technique: T1498
+    name: DoS as cover
+    nodes:
+      - {ref: flood, event_type: net_connection, desc: "Traffic flood against {web} from {ext_ip} saturating the perimeter"}
+      - {ref: alert1, event_type: alert, desc: "Availability alert raised for {web}; response team engaged"}
+      - {ref: auth, event_type: auth_success, desc: "{svc} authenticated to {srv} while monitoring attention was on {web}"}
+      - {ref: read, event_type: file_read, desc: "{n_files} records read from {srv}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Retrospective review flagged the {srv} access during the outage window"}
+    edges: [[flood, alert1], [alert1, auth], [auth, read], [read, detect]]
+    noise: [1, 2]
+    notes: "Alert triage was single-threaded; while the availability incident held attention, authentication alerts on {srv} queued unreviewed."
+
+  # =========================================================================
+  # T1598 -- Phishing for Information
+  # =========================================================================
+  - id: t1598_vendor_pretext
+    technique: T1598
+    name: Vendor pretext
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Message from {domain} to {user} requesting confirmation of account details"}
+      - {ref: reply, event_type: email_delivery, desc: "{user} replied with directory information about {n_files} staff"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Outbound content rule flagged the reply from {user}"}
+    edges: [[mail, reply], [reply, detect]]
+    noise: [1, 2]
+    notes: "No verification step exists for out-of-band requests for staff directory information."
+
+  - id: t1598_helpdesk_pretext
+    technique: T1598
+    name: Helpdesk pretext
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Message impersonating internal IT sent to {user} from {domain}"}
+      - {ref: visit, event_type: net_connection, desc: "{wks} loaded a credential form hosted on {domain}"}
+      - {ref: nofill, event_type: alert, desc: "Browser isolation blocked submission from {wks}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Campaign against {n_files} recipients identified by the mail gateway"}
+    edges: [[mail, visit], [visit, nofill], [nofill, detect]]
+    noise: [1, 2]
+    notes: "Internal IT communications are unsigned, so an impersonating sender was indistinguishable to {user}."
+
+  - id: t1598_recon_survey
+    technique: T1598
+    name: Recon survey
+    nodes:
+      - {ref: mail, event_type: email_delivery, desc: "Survey request from {domain} delivered to {n_files} addresses"}
+      - {ref: dns, event_type: dns_query, desc: "{wks} resolved {domain}, hosted on infrastructure with no business relationship"}
+      - {ref: visit, event_type: net_connection, desc: "{wks} submitted a form on {domain}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Reconnaissance pattern flagged after correlation across recipients"}
+    edges: [[mail, dns], [dns, visit], [visit, detect]]
+    noise: [1, 2]
+    notes: "Staff addresses are published on the public site, giving the sender a ready-made recipient list."
+
+  # =========================================================================
+  # T1110 -- Brute Force
+  # =========================================================================
+  - id: t1110_password_spray
+    technique: T1110
+    name: Password spray
+    nodes:
+      - {ref: spray, event_type: auth_failure, desc: "Single password attempted against {n_files} accounts from {ext_ip}"}
+      - {ref: hit, event_type: auth_success, desc: "{user} authenticated from {ext_ip}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Low-and-slow authentication pattern flagged from {ext_ip}"}
+    edges: [[spray, hit], [hit, detect]]
+    noise: [1, 2]
+    notes: "Password policy permits a common seasonal pattern, and lockout thresholds are per-account so a spray never trips them."
+
+  - id: t1110_rdp_hammer
+    technique: T1110
+    name: RDP hammering
+    nodes:
+      - {ref: probe, event_type: net_connection, desc: "Repeated connections to {srv} on port {port} from {ext_ip}"}
+      - {ref: fail, event_type: auth_failure, desc: "{n_files} failed logons against {srv} over {days} hours"}
+      - {ref: lock, event_type: alert, desc: "Account lockout threshold reached for {user}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Brute force rule fired for {srv}"}
+    edges: [[probe, fail], [fail, lock], [lock, detect]]
+    noise: [1, 2]
+    notes: "{srv} exposes remote desktop directly to the internet with no gateway or source restriction."
+
+  - id: t1110_stuffing_wave
+    technique: T1110
+    name: Credential stuffing wave
+    nodes:
+      - {ref: wave, event_type: auth_failure, desc: "{n_files} authentication attempts against the customer portal from {ext_ip}"}
+      - {ref: rate, event_type: alert, desc: "Rate limiter engaged for {ext_ip}"}
+      - {ref: rotate, event_type: net_connection, desc: "Attempts resumed from a different source range against {web}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Credential stuffing campaign confirmed against {web}"}
+    edges: [[wave, rate], [rate, rotate], [rotate, detect]]
+    noise: [1, 2]
+    notes: "Rate limiting on {web} keys on source address alone, so rotating ranges defeated it."
+
+  # =========================================================================
+  # T1071 -- Application Layer Protocol
+  # =========================================================================
+  - id: t1071_https_beacon
+    technique: T1071
+    name: HTTPS beaconing
+    nodes:
+      - {ref: beacon, event_type: net_connection, desc: "{wks} connected to {ext_ip} on port 443 at fixed intervals"}
+      - {ref: dns, event_type: dns_query, desc: "{wks} resolved {domain} repeatedly with low time-to-live"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Beaconing rule fired for {wks}"}
+    edges: [[dns, beacon], [beacon, detect]]
+    noise: [1, 2]
+    notes: "Outbound HTTPS from {wks} is unrestricted and uninspected, so a fixed-interval channel looked ordinary."
+
+  - id: t1071_dns_tunnel
+    technique: T1071
+    name: DNS tunnelling
+    nodes:
+      - {ref: q, event_type: dns_query, desc: "{wks} issued {n_files} queries for long subdomains of {domain}"}
+      - {ref: vol, event_type: alert, desc: "DNS query volume from {wks} exceeded baseline by an order of magnitude"}
+      - {ref: conn, event_type: net_connection, desc: "{wks} maintained a session to {ext_ip} on port {port}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Covert channel suspected from {wks}"}
+    edges: [[q, vol], [vol, conn], [conn, detect]]
+    noise: [1, 2]
+    notes: "Internal hosts resolve external names directly rather than through a monitored forwarder."
+
+  - id: t1071_webmail_c2
+    technique: T1071
+    name: Webmail-based control
+    nodes:
+      - {ref: proc, event_type: process_create, desc: "Process {file} on {wks} loaded a mail client library"}
+      - {ref: persist, event_type: service_install, desc: "Service installed on {wks} launching {path} at boot"}
+      - {ref: conn, event_type: net_connection, desc: "{wks} connected to a webmail service on {domain} outside browser context"}
+      - {ref: poll, event_type: net_connection, desc: "Connections from {wks} to {ext_ip} repeated every few minutes"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Non-browser access to webmail flagged on {wks}"}
+    edges: [[proc, persist], [persist, conn], [conn, poll], [poll, detect]]
+    noise: [1, 2]
+    notes: "Application allow-listing is not enforced on {wks}, letting a non-browser process reach a webmail service."
+
+  # =========================================================================
+  # T1005 -- Data from Local System
+  # =========================================================================
+  - id: t1005_share_sweep
+    technique: T1005
+    name: Local share sweep
+    nodes:
+      - {ref: auth, event_type: auth_success, desc: "{user} authenticated to {srv} from {wks}"}
+      - {ref: read, event_type: file_read, desc: "{n_files} files read from {srv} in under two minutes"}
+      - {ref: stage, event_type: file_write, desc: "Archive written to {path} on {srv}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Bulk file access anomaly flagged on {srv}"}
+    edges: [[auth, read], [read, stage], [stage, detect]]
+    noise: [1, 2]
+    notes: "Share permissions on {srv} grant read access far wider than role requires, so one account saw everything."
+
+  - id: t1005_endpoint_collect
+    technique: T1005
+    name: Endpoint collection
+    nodes:
+      - {ref: proc, event_type: process_create, desc: "Script interpreter started on {wks} under {user}"}
+      - {ref: read, event_type: file_read, desc: "Document directories on {wks} enumerated, {n_files} files matched"}
+      - {ref: stage, event_type: file_write, desc: "{path} created on {wks}, hash {hash}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Staging directory rule fired on {wks}"}
+    edges: [[proc, read], [read, stage], [stage, detect]]
+    noise: [1, 2]
+    notes: "Script interpreters are unrestricted for standard users on {wks}."
+
+  - id: t1005_db_export
+    technique: T1005
+    name: Database export
+    nodes:
+      - {ref: auth, event_type: auth_success, desc: "{svc} connected to the database instance on {srv}"}
+      - {ref: read, event_type: file_read, desc: "Full table export of {n_files} rows executed on {srv}"}
+      - {ref: write, event_type: file_write, desc: "Export file written to {path} on {srv}, {gb} GB"}
+      - {ref: move, event_type: data_transfer, desc: "{gb} GB copied from {srv} to removable media attached to {wks}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Unscheduled bulk export flagged on {srv}"}
+    edges: [[auth, read], [read, write], [write, move], [move, detect]]
+    noise: [1, 2]
+    notes: "{svc} holds full export rights on {srv}, and bulk exports are not alerted outside the maintenance window."
+
+  # =========================================================================
+  # T1056.001 -- Keylogging
+  # =========================================================================
+  - id: t1056_hook_install
+    technique: T1056.001
+    name: Hook installation
+    nodes:
+      - {ref: drop, event_type: file_write, desc: "{path} written on {wks}, hash {hash}"}
+      - {ref: reg, event_type: registry_write, desc: "Run key on {wks} set to launch {path} at logon"}
+      - {ref: log, event_type: file_write, desc: "Growing file {file} observed on {wks} with keystroke-like content"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Keylogger signature matched {path} on {wks}"}
+    edges: [[drop, reg], [reg, log], [log, detect]]
+    noise: [1, 2]
+    notes: "Standard users on {wks} can write to autorun locations, giving the capture tool persistence."
+
+  - id: t1056_browser_capture
+    technique: T1056.001
+    name: Browser credential capture
+    nodes:
+      - {ref: proc, event_type: process_create, desc: "Unsigned module injected into the browser process on {wks}"}
+      - {ref: cap, event_type: file_write, desc: "Captured form data written to {path} on {wks}"}
+      - {ref: send, event_type: net_connection, desc: "{wks} posted to {ext_ip} on port {port}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Browser injection rule fired on {wks}"}
+    edges: [[proc, cap], [cap, send], [send, detect]]
+    noise: [1, 2]
+    notes: "No module-signing enforcement in the browser on {wks}."
+
+  - id: t1056_admin_target
+    technique: T1056.001
+    name: Administrator targeting
+    nodes:
+      - {ref: install, event_type: service_install, desc: "Service installed on {wks} running {path}"}
+      - {ref: wait, event_type: auth_success, desc: "{svc} logged on to {wks} for routine maintenance"}
+      - {ref: cap, event_type: file_write, desc: "Credential material captured to {path} on {wks}"}
+      - {ref: detect, event_type: alert, terminal: true, desc: "Unexpected service and file pair flagged on {wks}"}
+    edges: [[install, wait], [wait, cap], [cap, detect]]
+    noise: [1, 2]
+    notes: "Administrators log on interactively to user endpoints such as {wks} instead of using a privileged access workstation."

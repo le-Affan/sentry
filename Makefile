@@ -9,7 +9,7 @@ BIN     := $(VENV)/bin
 SCRATCH := .scratch
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-eval data data-vcdb data-attack survey labels lint test clean clean-data
+.PHONY: help setup setup-eval data data-vcdb data-attack survey labels select blobs pilot reports reports-pilot stats sft lint test clean clean-data
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -54,6 +54,27 @@ survey:  ## Survey the raw corpora; rewrites docs/DATA_SURVEY.md
 
 labels:  ## Validate the technique lookup and report coverage; rewrites docs/LABEL_COVERAGE.md
 	$(BIN)/python -m src.label_coverage
+
+select:  ## Choose the ~1000 training records; writes data/processed/selected.jsonl
+	$(BIN)/python -m src.select_records
+
+blobs: select  ## Render telemetry blobs; writes data/processed/blobs.jsonl
+	$(BIN)/python -m src.templater
+
+pilot: blobs  ## Run the TEMPLATING_DESIGN.md section 6 pilot checks
+	$(BIN)/python -m src.pilot_leakage
+
+reports:  ## Generate reference reports via Gemini (resumes from checkpoint)
+	$(BIN)/python -m src.generate_reports
+
+reports-pilot:  ## Generate just 20 reference reports
+	$(BIN)/python -m src.generate_reports --limit 20
+
+stats:  ## Summarise the corpus; rewrites docs/DATASET_STATS.md
+	$(BIN)/python -m src.dataset_stats
+
+sft:  ## Write train.jsonl / test.jsonl in Qwen chat format, token-checked
+	$(BIN)/python -m src.build_sft
 
 # --- quality --------------------------------------------------------------
 
