@@ -39,3 +39,44 @@ def test_scope_doc_declares_the_same_headings():
     for level in c.SEVERITY_LEVELS:
         assert level in scope
 
+
+def test_technique_lookup_is_valid():
+    """Every curated technique ID must exist and be current in the pinned bundle.
+
+    A revoked ID here becomes a wrong reference answer in every training pair
+    that uses it, so this guards the labelling artifact directly.
+    """
+    import pytest
+
+    if not c.ATTACK_BUNDLE.exists():
+        pytest.skip("ATT&CK bundle not downloaded; run `make data`")
+
+    import yaml
+    from src.label_coverage import load_attack_index, validate_lookup
+
+    rows = yaml.safe_load((c.ROOT / "labels" / "technique_lookup.yaml").read_text())["techniques"]
+    assert validate_lookup(rows, load_attack_index()) == []
+
+
+def test_lookup_and_exclusions_do_not_overlap():
+    import yaml
+
+    lut = yaml.safe_load((c.ROOT / "labels" / "technique_lookup.yaml").read_text())
+    exc = yaml.safe_load((c.ROOT / "labels" / "excluded_varieties.yaml").read_text())
+
+    labelled = {r["veris_path"] for r in lut["techniques"]}
+    excluded = {e["veris_path"] for e in exc["excluded_varieties"]}
+    deferred = {d["veris_path"] for d in exc["deferred"]}
+
+    assert not (labelled & excluded), "a variety is both labelled and excluded"
+    assert not (labelled & deferred), "a variety is both labelled and deferred"
+
+
+def test_lookup_confidence_values_are_known():
+    import yaml
+
+    rows = yaml.safe_load((c.ROOT / "labels" / "technique_lookup.yaml").read_text())["techniques"]
+    for r in rows:
+        assert r["confidence"] in ("high", "medium", "low"), r["veris_path"]
+        assert r["attack_id"].startswith("T"), r["veris_path"]
+        assert r["rationale"].strip(), r["veris_path"]

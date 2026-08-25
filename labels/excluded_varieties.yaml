@@ -1,0 +1,106 @@
+# =============================================================================
+# VERIS varieties deliberately EXCLUDED from the dataset
+# =============================================================================
+#
+# ATT&CK models adversary behaviour in computer intrusions. Much of VCDB records
+# incidents that are real, consequential, and simply not intrusions -- a misdirected
+# fax, a stolen laptop, a clerk browsing records they should not. Force-mapping those
+# onto a technique ID would manufacture labels that no analyst would agree with and
+# would corrupt the technique-accuracy metric.
+#
+# So they are excluded rather than guessed. This costs us roughly 60% of VCDB and is
+# the right trade: a smaller honestly-labelled corpus beats a larger fabricated one.
+#
+# Categories are excluded wholesale where the whole category is out of scope; specific
+# varieties are listed where the category is in scope but an individual value is not.
+# =============================================================================
+
+version: 1
+curated: "2026-08-26"
+
+excluded_categories:
+
+  - category: error
+    reason: Accidents and mistakes, not adversary action. ATT&CK has no vocabulary for a misconfiguration nobody exploited.
+
+  - category: physical
+    reason: Theft, tampering, and surveillance in the physical world. Outside the Enterprise matrix's scope entirely.
+
+  - category: misuse
+    reason: Authorised insiders abusing legitimate access. Genuine incidents, but ATT&CK describes intrusion, not policy violation.
+
+  - category: environmental
+    reason: Fire, flood, power failure. No adversary at all. Only 10 records.
+
+excluded_varieties:
+
+  - veris_path: hacking.Unknown
+    reason: Records that a hacking action occurred but not which one. No technique is derivable.
+
+  - veris_path: malware.Unknown
+    reason: Malware confirmed, family and behaviour unrecorded.
+
+  - veris_path: social.Unknown
+    reason: Social engineering confirmed, method unrecorded.
+
+  - veris_path: hacking.Other
+    reason: Explicit catch-all for actions the VERIS enum does not cover.
+
+  - veris_path: malware.Other
+    reason: Explicit catch-all.
+
+  - veris_path: social.Other
+    reason: Explicit catch-all.
+
+  - veris_path: hacking.Abuse of functionality
+    reason: Too coarse to label. The official crosswalk maps this single variety to 115 distinct techniques, which is a direct measure of its ambiguity.
+
+  - veris_path: social.Bribery
+    reason: Recruiting an insider. The subsequent misuse may be in scope; the bribery itself is not adversary tradecraft ATT&CK models.
+
+  - veris_path: social.Influence
+    reason: Manipulation of a person without a technical delivery mechanism.
+
+  - veris_path: social.Forgery
+    reason: Document forgery, typically physical or financial fraud rather than intrusion.
+
+  - veris_path: social.Extortion
+    reason: Coercion of a person. Where extortion accompanies encryption, malware.Ransomware carries the label instead.
+
+# ---------------------------------------------------------------------------
+# In scope but not yet curated
+# ---------------------------------------------------------------------------
+# These carry a plausible ATT&CK equivalent and were left out only because they are
+# too rare to affect coverage. Add them to technique_lookup.yaml if the labelled pool
+# turns out too small. They are recorded here so the omission is visible rather than
+# accidental.
+
+deferred:
+  - veris_path: hacking.AitM
+    note: Adversary-in-the-middle; would map to T1557. Fewer than 10 records.
+  - veris_path: hacking.XSS
+    note: No direct ATT&CK equivalent; arguably T1189 Drive-by Compromise. Fewer than 10 records.
+  - veris_path: hacking.Path traversal
+    note: Would fold into T1190 like SQLi. Negligible count.
+  - veris_path: hacking.Buffer overflow
+    note: Would fold into T1190 or T1203 depending on target. Negligible count.
+  - veris_path: hacking.Forced browsing
+    note: Closest is T1190. Negligible count.
+  - veris_path: malware.Rootkit
+    note: Would map to T1014. Negligible count.
+  - veris_path: malware.Packet sniffer
+    note: Would map to T1040 Network Sniffing. Negligible count.
+  - veris_path: malware.Adminware
+    note: Legitimate admin tooling used maliciously; T1219 or T1072. Negligible count.
+  - veris_path: malware.Spam
+    note: Sending spam is an outcome, not an intrusion technique. Negligible count.
+  - veris_path: malware.Trojan
+    note: Delivery framing rather than behaviour; would duplicate T1204. Negligible count.
+  - veris_path: malware.Capture app data
+    note: Overlaps malware.Capture stored data (T1005). Left out to avoid a near-duplicate label.
+  - veris_path: malware.Scan network
+    note: Would map to T1046 Network Service Discovery. Always co-occurs with a stronger variety.
+  - veris_path: malware.Exploit vuln
+    note: Duplicates hacking.Exploit vuln (T1190). Always co-occurs.
+  - veris_path: malware.Brute force
+    note: Duplicates hacking.Brute force (T1110). Always co-occurs.

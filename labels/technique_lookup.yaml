@@ -1,0 +1,211 @@
+# =============================================================================
+# VERIS action variety  ->  single MITRE ATT&CK technique
+# =============================================================================
+#
+# THIS IS OUR LABELLING DECISION. IT IS NOT THE OFFICIAL VERIS->ATT&CK CROSSWALK.
+#
+# Why we are not using the official crosswalk
+# -------------------------------------------
+# The `vz-risk/veris` repository ships `mappings/veris-1.4.1_attack-19.1-enterprise.csv`,
+# which looks like the obvious source of ground-truth technique labels. It cannot serve
+# that purpose (measured in docs/DATA_SURVEY.md 3.3):
+#
+#   * All 1,255 substantive rows carry `mapping_type: related-to`. There is no
+#     "primary technique" designation and `score_category` is empty on every row.
+#     The crosswalk asserts association, never identity.
+#   * 178 VERIS enum paths map to 589 distinct ATT&CK IDs. Only 64 map one-to-one.
+#     Median fan-out is 2; `hacking.Abuse of functionality` maps to 115 techniques.
+#   * Applied to VCDB: 4,270 records have a mappable action, but only 15 resolve to
+#     exactly one candidate technique. 3,920 resolve to six or more.
+#
+# Fifteen usable records against a ~1,000-pair target. So we curate by hand instead.
+# Each row below is a judgement call by this project about which single technique best
+# characterises an incident carrying that VERIS variety. Reasonable analysts would
+# disagree on some rows; the `confidence` field marks where.
+#
+# What this means for evaluation
+# ------------------------------
+# Technique-ID accuracy measures agreement with THIS TABLE, not with ground truth.
+# The model's ceiling is our curation quality, and systematic errors here are invisible
+# to the metric. SCOPE.md 5 therefore treats technique accuracy as a secondary
+# format-compliance signal, not a detection result.
+#
+# Field reference
+# ---------------
+#   veris_path   VERIS action path, `<category>.<variety>`, matching the enum exactly.
+#   attack_id    ATT&CK Enterprise technique or sub-technique ID.
+#   attack_name  Canonical ATT&CK name. Must match the ID exactly -- validated against
+#                the pinned bundle by src/label_coverage.py, which fails on any
+#                unknown or revoked ID.
+#   rationale    One line: why this technique and not a neighbour.
+#   confidence   high   -- near-unambiguous, the variety names the technique.
+#                medium -- defensible, but a different technique is arguable.
+#                low    -- coarse VERIS category forced onto a specific technique.
+#   priority     Tie-break for records carrying several varieties (34.3% of the cyber
+#                pool). Highest priority wins. Ordered so the technique that most
+#                defines the character of the incident is chosen: impact first, then
+#                initial access, then credential access, exfiltration, C2, collection.
+#
+# ATT&CK version pinned: Enterprise 19.2. See docs/DATA_SOURCES.md.
+# =============================================================================
+
+version: 1
+attack_version: "19.2"
+curated: "2026-08-26"
+
+techniques:
+
+  # --- Impact: defines the incident when present -----------------------------
+  - veris_path: malware.Ransomware
+    attack_id: T1486
+    attack_name: Data Encrypted for Impact
+    rationale: Ransomware's defining act is encrypting data to extort; T1486 names exactly that.
+    confidence: high
+    priority: 100
+
+  - veris_path: malware.Destroy data
+    attack_id: T1485
+    attack_name: Data Destruction
+    rationale: Destruction without an extortion demand is T1485, distinct from T1486 encryption.
+    confidence: high
+    priority: 95
+
+  # --- Initial access --------------------------------------------------------
+  - veris_path: social.Phishing
+    attack_id: T1566
+    attack_name: Phishing
+    rationale: Direct name match. Parent technique used because VERIS does not record whether the lure was an attachment, link, or service.
+    confidence: high
+    priority: 90
+
+  - veris_path: hacking.Exploit vuln
+    attack_id: T1190
+    attack_name: Exploit Public-Facing Application
+    rationale: VCDB exploit-vuln records are overwhelmingly internet-facing systems; T1203 client-side execution is the alternative but is rarer here.
+    confidence: medium
+    priority: 85
+
+  - veris_path: hacking.SQLi
+    attack_id: T1190
+    attack_name: Exploit Public-Facing Application
+    rationale: ATT&CK has no SQL-injection technique; injection against a web app is a T1190 instance.
+    confidence: medium
+    priority: 84
+
+  - veris_path: hacking.Exploit misconfig
+    attack_id: T1190
+    attack_name: Exploit Public-Facing Application
+    rationale: Exploiting an exposed misconfiguration is the same access path as exploiting a vulnerability.
+    confidence: low
+    priority: 83
+
+  # --- Credential access -----------------------------------------------------
+  - veris_path: hacking.Use of stolen creds
+    attack_id: T1078
+    attack_name: Valid Accounts
+    rationale: Authenticating with legitimate credentials obtained elsewhere is precisely T1078.
+    confidence: high
+    priority: 80
+
+  - veris_path: hacking.Brute force
+    attack_id: T1110
+    attack_name: Brute Force
+    rationale: Direct name match, including credential stuffing and password spraying.
+    confidence: high
+    priority: 75
+
+  - veris_path: malware.Password dumper
+    attack_id: T1003
+    attack_name: OS Credential Dumping
+    rationale: Tooling that extracts stored credentials from the OS; parent used since VCDB does not name the store.
+    confidence: high
+    priority: 70
+
+  - veris_path: malware.Spyware/Keylogger
+    attack_id: T1056.001
+    attack_name: Keylogging
+    rationale: VERIS conflates spyware and keyloggers; keylogging is the dominant observed behaviour.
+    confidence: medium
+    priority: 68
+
+  # --- Exfiltration and collection ------------------------------------------
+  - veris_path: malware.Export data
+    attack_id: T1041
+    attack_name: Exfiltration Over C2 Channel
+    rationale: Malware exporting data almost always reuses its existing C2 channel rather than opening a separate one.
+    confidence: medium
+    priority: 65
+
+  - veris_path: malware.Capture stored data
+    attack_id: T1005
+    attack_name: Data from Local System
+    rationale: Reading data at rest on a compromised host.
+    confidence: high
+    priority: 60
+
+  - veris_path: malware.RAM scraper
+    attack_id: T1005
+    attack_name: Data from Local System
+    rationale: Scraping process memory for card data is collection from the local system; ATT&CK has no dedicated RAM-scraper technique.
+    confidence: low
+    priority: 58
+
+  # --- Availability ----------------------------------------------------------
+  - veris_path: hacking.DoS
+    attack_id: T1498
+    attack_name: Network Denial of Service
+    rationale: VCDB DoS records are predominantly network floods; T1499 endpoint DoS is the less common alternative.
+    confidence: medium
+    priority: 55
+
+  # --- Execution, command and control ---------------------------------------
+  - veris_path: malware.Downloader
+    attack_id: T1105
+    attack_name: Ingress Tool Transfer
+    rationale: A downloader's function is pulling further payloads into the environment.
+    confidence: high
+    priority: 50
+
+  - veris_path: malware.Backdoor or C2
+    attack_id: T1071
+    attack_name: Application Layer Protocol
+    rationale: The observable is a persistent control channel over ordinary protocols; parent used since VCDB does not name the protocol.
+    confidence: medium
+    priority: 45
+
+  - veris_path: malware.C2
+    attack_id: T1071
+    attack_name: Application Layer Protocol
+    rationale: Same observable as above, without the persistence implication.
+    confidence: medium
+    priority: 44
+
+  - veris_path: malware.Backdoor
+    attack_id: T1219
+    attack_name: Remote Access Tools
+    rationale: An installed implant granting interactive remote access, as distinct from the channel it speaks over.
+    confidence: medium
+    priority: 42
+
+  - veris_path: hacking.Backdoor
+    attack_id: T1133
+    attack_name: External Remote Services
+    rationale: As a hacking action this is the attacker using an existing remote access path, not installing malware.
+    confidence: low
+    priority: 40
+
+  # --- Defense evasion -------------------------------------------------------
+  - veris_path: malware.Disable controls
+    attack_id: T1685
+    attack_name: Disable or Modify Tools
+    rationale: Tampering with security tooling. Note T1562 Impair Defenses was revoked in ATT&CK 19.x in favour of T1685.
+    confidence: high
+    priority: 35
+
+  # --- Social engineering, non-phishing --------------------------------------
+  - veris_path: social.Pretexting
+    attack_id: T1598
+    attack_name: Phishing for Information
+    rationale: Pretexting elicits information through a fabricated scenario rather than delivering a payload.
+    confidence: medium
+    priority: 30
