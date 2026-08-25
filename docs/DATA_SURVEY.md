@@ -332,7 +332,28 @@ description; median description 163 words. It is directly usable as a retrieval 
 once STIX citation markers are stripped and long descriptions are truncated to fit the
 1024-token budget.
 
-### 3.5 Honest summary of what this dataset is
+### 3.5 The last strand of real text was dropped
+
+`analyst_notes` was originally DERIVED: condensed from the VCDB `summary`, the one field
+in a blob carrying real human writing (95.1% present, median 24 words). It has been
+changed to SYNTHETIC, generated from the same chain skeleton that produces the EVENTS
+rows.
+
+The reason is that it did not survive contact with the generated blobs. The summary
+describes the *real* incident behind the VCDB record; the events describe an *invented*
+one. Pairing them produced blobs whose narrative contradicted their own telemetry — one
+example carried an `analyst_notes` about an Accellion FTA zero-day beside a backup-first
+ransomware chain on a workstation; another was dated November 2017 beside events dated
+April 2015. Since SCOPE.md §2.9 made `analyst_notes` the source for `## Root Cause`, every
+reference report built from such a blob would derive its root cause from a different
+incident than the one in the events.
+
+The cost is real and worth stating: **no free-text field in a blob now contains human
+writing.** Every word a model reads at inference is machine-generated. The alternative
+was reference reports whose most analytical section was systematically wrong, which is
+worse. See `TEMPLATING_DESIGN.md` §7 for what this means for the project's claims.
+
+### 3.6 Honest summary of what this dataset is
 
 The training pairs will be **synthetic telemetry generated from real incident
 classifications, paired with reports derived from those same classifications.** That is

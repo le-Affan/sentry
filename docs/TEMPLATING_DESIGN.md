@@ -217,7 +217,39 @@ full build, generate a pilot of ~100 blobs and confirm:
 
 ---
 
-## 7. Residual limitation — stated plainly
+## 7. Residual limitations — stated plainly
+
+### 7.1 Measured result: the mechanisms did not work
+
+The §6.3 leakage test was run against the generated corpus. It failed.
+
+| Corpus | Classifier accuracy | Majority baseline | Lift |
+|---|---|---|---|
+| Full chains, untruncated | **89.8%** | 17.4% | **+72.4 points** |
+| After the truncation ladder | 54.6% | 17.2% | +37.4 points |
+
+A bag of `event_type` 1–3 grams — no description text, no entities, nothing but the
+sequence of event-type values — recovers the technique for nine blobs in ten. The four
+mechanisms in §2–§5 reduced the leak but did not close it: three to four skeletons per
+technique is not enough overlap to hide a distinctive event-type signature, and the
+noise pool is drawn from a shared vocabulary that the classifier learns to ignore.
+Note also that leakage is *worse* on untruncated chains, so a larger token budget makes
+the problem larger, not smaller.
+
+**This is accepted rather than fixed, and the reason is what the project claims.** The
+deliverable is a model that turns structured telemetry into a well-formed, well-grounded,
+human-readable incident report. Report quality, format adherence, and grounding are the
+primary metrics (SCOPE.md §5.1), and none of them are affected by structural leakage — a
+model cannot infer a good `## Summary`, a correct asset list, or a plausible root cause
+from an event-type histogram. What leakage inflates is technique-ID accuracy, which
+SCOPE.md §5.2 already classes as a secondary compliance signal reported against a
+majority-class baseline. Closing the leak would mean sharing chain shapes across
+techniques so the signal lived only in description text — a redesign that would improve
+one secondary number while changing nothing about the primary claim. The honest move is
+to publish the 89.8% figure alongside the technique-accuracy result, so no reader can
+mistake that metric for a detection capability.
+
+### 7.2 The broader residual limitation
 
 The four mechanisms make the shortcut harder. They do not eliminate it, and no amount of
 templating design can.

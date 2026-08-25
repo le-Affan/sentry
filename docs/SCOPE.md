@@ -102,7 +102,18 @@ Event count is capped at 12 rows to hold the token budget.
 
 ### 2.7 Token budget
 
-Hard constraint: **the rendered blob must fit in ~700 tokens.** The dataset builder
+Hard constraint: **the rendered blob must fit in 850 tokens**, measured with the real
+Qwen2.5 tokenizer rather than a character heuristic. The budget is derived from §6:
+
+```
+ 1536   max_seq_len
+-  560   report allowance (the §3.7 reference report measures 451; 560 gives p90 headroom)
+-  106   system prompt
+-   13   Qwen chat-template scaffolding
+=  857   rounded down to 850
+```
+
+The dataset builder
 truncates to satisfy this in fixed priority order, cheapest loss first:
 
 1. Trim event `description` fields to 20 words.
@@ -195,10 +206,11 @@ our templating code).
 | ENRICHMENT | `detections` | **SYNTHETIC** | Rule names invented; loosely informed by `discovery_method` |
 | ENRICHMENT | `ioc_hashes` | **SYNTHETIC** | 6/10,596 records contain a hash, all incidental |
 | ENRICHMENT | `external_ips` | **SYNTHETIC** | See ASSETS `ip` |
-| ENRICHMENT | `analyst_notes` | **DERIVED** | Condensed from VERIS `summary` (95.1% present, median 24 words) plus `action.*.vector` and `control_failure` where present. The one field carrying real human narrative |
+| ENRICHMENT | `analyst_notes` | **SYNTHETIC** | Written from the same chain skeleton that generates the EVENTS rows. Previously condensed from the VCDB `summary`, but that describes a *different* incident than the synthetic events, leaving `## Root Cause` underivable — see `DATA_SURVEY.md` §3.5 |
 
 **Tally: 6 VCDB/DERIVED-from-real-facts in metadata, 4 DERIVED in ASSETS/ACCOUNTS, and
-effectively the entire EVENTS block synthetic.** See `docs/DATA_SURVEY.md` §3 for the
+the entire EVENTS block plus `analyst_notes` synthetic.** No free-text field in a blob
+now carries real human writing.** See `docs/DATA_SURVEY.md` §3 for the
 measurements behind each mark, and §3.3 for why the shipped VERIS→ATT&CK crosswalk
 cannot supply ground-truth technique labels.
 
@@ -476,8 +488,8 @@ explicit scope revision, not an in-flight decision.
 |---|---|
 | Base model | `Qwen2.5-3B-Instruct` |
 | Fine-tuning method | 4-bit QLoRA |
-| `max_seq_len` | 1024 |
-| Dataset size | ~900 train / 100 test pairs |
+| `max_seq_len` | 1536 |
+| Dataset size | 360 train / 40 test pairs (400 total) |
 | Training runs | Single training run — no hyperparameter sweep, no retraining |
 | Compute | Kaggle GPU |
 | Data spine | VERIS Community Database (VCDB) |
@@ -486,7 +498,7 @@ explicit scope revision, not an in-flight decision.
 
 Notes on the consequences of these constraints, so they are not relitigated later:
 
-- `max_seq_len 1024` is why the input blob is capped at ~700 tokens (§2.7) and the
+- `max_seq_len 1536` is why the input blob is capped at 850 tokens (§2.7) and the
   output spec caps section lengths (§3) — input plus output must fit one sequence.
 - A single training run means the baseline evaluation must be run *before* training, as
   there is no budget to redo it.

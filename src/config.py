@@ -33,14 +33,23 @@ OUTPUTS = ROOT / "outputs"
 # ---------------------------------------------------------------------------
 BASE_MODEL = "Qwen/Qwen2.5-3B-Instruct"
 QUANTIZATION = "4bit-nf4"
-MAX_SEQ_LEN = 1024
+MAX_SEQ_LEN = 1536
 
-N_TRAIN = 900
-N_TEST = 100
+N_TRAIN = 360
+N_TEST = 40
 
-# Input blob budget -- SCOPE.md section 2.7. Leaves room in MAX_SEQ_LEN for the
-# generated report plus the chat template's own tokens.
-MAX_INPUT_TOKENS = 700
+# Input blob budget -- SCOPE.md section 2.7. Derived, not guessed:
+#
+#   1536  max_seq_len
+#   - 560 report allowance (the SCOPE.md 3.7 reference report measures 451 with
+#         the real Qwen2.5 tokenizer; 560 leaves p90 headroom)
+#   - 106 system prompt
+#   -  13 Qwen chat-template scaffolding (measured, not estimated)
+#   = 857, rounded down
+#
+# The phase-1 figure of 700 came from a characters/3.6 heuristic and was wrong:
+# structured telemetry tokenizes far worse than prose.
+MAX_INPUT_TOKENS = 850
 MAX_EVENT_ROWS = 12
 
 # ---------------------------------------------------------------------------

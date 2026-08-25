@@ -9,9 +9,11 @@ from src import config as c
 
 def test_fixed_constraints_match_scope():
     assert c.BASE_MODEL == "Qwen/Qwen2.5-3B-Instruct"
-    assert c.MAX_SEQ_LEN == 1024
-    assert c.N_TRAIN == 900
-    assert c.N_TEST == 100
+    # Raised from 1024 in phase 3c: the SCOPE.md 3.7 reference report measures
+    # 451 real Qwen tokens, which left no workable blob budget at 1024.
+    assert c.MAX_SEQ_LEN == 1536
+    assert c.N_TRAIN == 360
+    assert c.N_TEST == 40
 
 
 def test_input_budget_leaves_room_for_output():
