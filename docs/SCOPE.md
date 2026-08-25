@@ -406,18 +406,64 @@ hash:     \b[a-f0-9]{12,64}\b
 
 Metrics only. No implementation in this phase.
 
+### 5.0 What this evaluation does and does not claim
+
+The training data is synthetic telemetry generated from real incident classifications
+(`docs/DATA_SURVEY.md` §3, `docs/TEMPLATING_DESIGN.md` §7). Every event row, hostname,
+IP, path, and hash is fabricated by our generator, and the technique label comes from
+our own 21-row hand-curated lookup rather than from any authority. That constrains what
+the numbers below can mean, so the metrics are split into two tiers and reported that
+way throughout.
+
+**Primary claims — what this project asserts:**
+
+- **Report quality.** The generated report is accurate, complete, and useful to a human
+  analyst, measured by ROUGE-L, BERTScore, and the manual rubric.
+- **Format adherence.** All six sections are present, correctly named, correctly
+  ordered, and within their specified lengths — measured by parse success rate and the
+  spec-violation counters.
+- **Grounding.** The report does not invent entities absent from its input.
+
+**Secondary metrics — compliance signals, not capability claims:**
+
+- **Technique-ID accuracy** measures whether the model emits a well-formed, plausible
+  ATT&CK ID consistent with the telemetry it was handed, and agreeing with our lookup.
+  It is *not* a detection result and must not be reported as one. Its ceiling is our
+  curation quality; systematic errors in the lookup are invisible to it.
+- **Severity accuracy** likewise measures agreement with the rubric in §3.4 applied to
+  synthetic telemetry, not calibrated risk judgement.
+
+Both secondary metrics are reported **against the majority-class baseline**. Without
+that comparison they cannot be distinguished from guessing the most common label — and
+the labelled pool is 46.3% one class before capping (`docs/LABEL_COVERAGE.md` §4).
+
+### 5.1 Primary metrics
+
 | # | Metric | Applied to | Reported as |
 |---|---|---|---|
 | 1 | **ROUGE-L** | Full report, and per section | F1, mean over test set |
 | 2 | **BERTScore** | Full report, and per section | F1, mean over test set |
-| 3 | **Technique-ID accuracy** | `## Attack Technique` | Exact-match rate; also reported tactic-level (parent technique) and top-3 confusion pairs |
-| 4 | **Severity accuracy** | `## Severity` | Exact-match rate; plus 4×4 confusion matrix and off-by-one-adjacent rate |
-| 5 | **Grounding score** | Whole report | Fraction of extracted output entities (IPs, hostnames, accounts, paths, hashes) not present in the input blob — lower is better |
-| 6 | **Manual rubric** | Stratified sample of test outputs | Human 1–5 scores on factual accuracy, completeness, actionability of recommendations, and format compliance |
+| 3 | **Grounding score** | Whole report | Fraction of extracted output entities (IPs, hostnames, accounts, paths, hashes) not present in the input blob — lower is better |
+| 4 | **Format adherence** | Whole report | Parse success rate; plus `technique_multi` and section-length violation rates |
+| 5 | **Manual rubric** | Stratified sample of test outputs | Human 1–5 scores on factual accuracy, completeness, actionability of recommendations, and format compliance |
 
-Supporting counters reported alongside: parse success rate, `technique_multi` violation
-rate, section-length spec violation rate. All six are computed for the untrained base model (baseline), the fine-tuned model, and
-the fine-tuned model with RAG, on the same held-out test split.
+### 5.2 Secondary metrics
+
+| # | Metric | Applied to | Reported as |
+|---|---|---|---|
+| 6 | **Technique-ID accuracy** | `## Attack Technique` | Exact-match rate **vs. majority-class baseline**; also parent-technique-level accuracy and top-3 confusion pairs |
+| 7 | **Severity accuracy** | `## Severity` | Exact-match rate **vs. majority-class baseline**; plus 4×4 confusion matrix and off-by-one-adjacent rate |
+
+### 5.3 Protocol
+
+All seven metrics are computed for the untrained base model (baseline), the fine-tuned
+model, and the fine-tuned model with RAG, on the same held-out test split. The split is
+stratified by technique so no class is absent from the 100-record test set.
+
+The structural-leakage check in `TEMPLATING_DESIGN.md` §6.3 is run **before** training
+and its result reported alongside technique accuracy. If a trivial classifier can
+recover the technique from event structure alone, technique accuracy measures the
+generator rather than the model, and must be reported with that caveat attached.
 
 ---
 
