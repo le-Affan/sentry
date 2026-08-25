@@ -1,0 +1,7 @@
+# Evaluation metrics from SCOPE.md section 5. Pulls in torch, so it is kept
+# separate from the light local set.
+#   pip install -r requirements.txt -r requirements-eval.txt
+
+rouge-score>=0.1.2        # ROUGE-L
+bert-score>=0.3.13        # BERTScore  (pulls torch + transformers)
+torch>=2.4                # CPU wheel is fine for scoring

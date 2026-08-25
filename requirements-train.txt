@@ -1,0 +1,13 @@
+# Kaggle training environment ONLY. Do not install locally.
+# Kaggle images ship torch + CUDA already; these are the additions.
+#
+# Fixed constraints (SCOPE.md section 6): Qwen2.5-3B-Instruct, 4-bit QLoRA,
+# max_seq_len 1024, single training run, Kaggle GPU.
+
+transformers>=4.44
+peft>=0.12                # LoRA adapters
+trl>=0.9                  # SFTTrainer
+bitsandbytes>=0.43        # 4-bit NF4 quantization
+accelerate>=0.33
+datasets>=2.20
+sentencepiece>=0.2

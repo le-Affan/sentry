@@ -1,0 +1,29 @@
+# Local development: data survey, dataset build, RAG index, scoring.
+# Deliberately excludes the training stack -- training runs on Kaggle, and
+# torch/bitsandbytes are not needed to build or evaluate a dataset locally.
+# Install with:  make setup
+#
+# Python 3.12. Do not use 3.14 -- much of the ML stack has no wheels for it yet.
+
+# --- core data handling ---------------------------------------------------
+pandas>=2.2,<3.0
+numpy>=1.26,<3.0
+tqdm>=4.66
+
+# --- dataset build --------------------------------------------------------
+jsonschema>=4.21          # validate generated blobs against the input spec
+pyyaml>=6.0               # labels/*.yaml
+python-dateutil>=2.9      # timeline arithmetic for synthesized timestamps
+
+# --- tokenizer (no torch needed) -----------------------------------------
+# Needed to enforce the ~700-token input budget in SCOPE.md 2.7 against the
+# real Qwen2.5 tokenizer rather than a character heuristic.
+transformers>=4.44
+tokenizers>=0.19
+
+# --- RAG index ------------------------------------------------------------
+scikit-learn>=1.5         # TF-IDF baseline retrieval over the ATT&CK corpus
+
+# --- dev ------------------------------------------------------------------
+ruff>=0.6
+pytest>=8.0

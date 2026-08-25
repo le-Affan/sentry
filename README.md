@@ -21,12 +21,39 @@ constraints live in [`docs/SCOPE.md`](docs/SCOPE.md).
 7. **Eval** — score baseline vs. fine-tuned vs. fine-tuned+RAG on the same test split.
 8. **Demo** — end-to-end walkthrough: paste a blob, get a report.
 
+## Setup
+
+Local work needs Python 3.12 — much of the ML stack has no 3.14 wheels yet.
+Training does not run locally; it runs on Kaggle (see the fixed constraints in
+`docs/SCOPE.md` §6).
+
+```sh
+make setup          # create .venv and install local dependencies
+make data           # download VCDB + MITRE ATT&CK (~100 MB, gitignored)
+make survey         # regenerate docs/DATA_SURVEY.md
+make test lint      # checks
+make help           # all targets
+```
+
+Secrets go in `.env` (gitignored) — copy `.env.example` and fill it in. Only
+needed for pushing to Kaggle from the CLI.
+
+Dependencies are split by where they run:
+
+| File | Scope |
+|---|---|
+| `requirements.txt` | Local: dataset build, tokenizer, RAG index. No torch. |
+| `requirements-eval.txt` | Scoring metrics. Pulls torch. |
+| `requirements-train.txt` | Kaggle only — do not install locally. |
+
 ## Layout
 
 | Path | Contents |
 |---|---|
-| `docs/` | Specs and project documentation |
-| `data/` | Raw and processed datasets |
-| `src/` | Reusable code |
+| `docs/` | Specs and project documentation — start with `SCOPE.md` |
+| `data/raw/` | Downloaded corpora (gitignored; `make data` refetches) |
+| `data/interim/`, `data/processed/` | Build intermediates and final splits (gitignored) |
+| `src/` | Reusable code; `config.py` holds the fixed constraints |
 | `notebooks/` | Kaggle training and evaluation notebooks |
-| `outputs/` | Model artifacts, generations, evaluation results |
+| `outputs/` | Model artifacts, generations, evaluation results (gitignored) |
+| `tests/` | Guards against drift between docs and code |
