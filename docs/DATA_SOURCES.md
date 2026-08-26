@@ -1,3 +1,4 @@
+<!-- Last updated 2026-08-27. -->
 # DATA SOURCES
 
 Every raw input to this project, with license and retrieval date, so the write-up can
@@ -60,7 +61,7 @@ hand-curated `labels/technique_lookup.yaml`.
 
 | | |
 |---|---|
-| **Role in project** | RAG retrieval corpus, and the authority for technique IDs and names |
+| **Role in project** | Authority for technique IDs and canonical names during labelling. **RAG: future scope, not implemented.** |
 | **URL** | https://github.com/mitre-attack/attack-stix-data |
 | **File used** | `enterprise-attack/enterprise-attack.json` |
 | **Retrieved** | 2026-08-26 |
@@ -89,7 +90,7 @@ the ATT&CK version is therefore part of reproducing this project, not a detail.
 | **Model** | `Qwen/Qwen2.5-3B-Instruct` |
 | **URL** | https://huggingface.co/Qwen/Qwen2.5-3B-Instruct |
 | **License** | Apache 2.0 |
-| **Retrieved** | Not yet downloaded — pulled at training time on Kaggle |
+| **Retrieved** | Downloaded on Kaggle at training time (kernel `l0affan/sentry-qlora-train`) |
 
 ---
 

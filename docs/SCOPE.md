@@ -1,3 +1,4 @@
+<!-- Last updated 2026-08-27. Numbers here are final and match EVAL_RESULTS.md. -->
 # SCOPE — Telemetry-to-Incident-Report Fine-Tune
 
 ## 1. Project Statement
@@ -11,8 +12,10 @@ assets, attack technique, severity, root cause, and recommended actions. The wor
 strictly defensive and academic: it summarizes and classifies incidents that already
 happened, and produces no offensive capability. The training spine is the VERIS
 Community Database (VCDB), which supplies real, de-identified incident records; the
-MITRE ATT&CK corpus is used as a retrieval source at inference time so the model can
-ground technique attribution in canonical technique descriptions rather than memory.
+The MITRE ATT&CK corpus is the authority for technique IDs and canonical names used in
+labelling. **Retrieval-augmented generation (RAG) was scoped but never implemented — it
+remains future scope.** No retrieval step exists in any script, notebook, or result in
+this repository.
 Success is defined as a model that produces parseable, well-grounded reports whose
 technique ID and severity label can be scored automatically against ground truth.
 
@@ -469,8 +472,9 @@ the labelled pool is 46.3% one class before capping (`docs/LABEL_COVERAGE.md` §
 ### 5.3 Protocol
 
 All seven metrics are computed for the untrained base model (baseline), the fine-tuned
-model, and the fine-tuned model with RAG, on the same held-out test split. The split is
-stratified by technique so no class is absent from the 100-record test set.
+model on the same held-out test split. The split is stratified by technique so no class
+is absent from the 40-record test set. **The originally-planned third arm (fine-tuned +
+RAG) was not built; see `LIMITATIONS.md`.**
 
 The structural-leakage check in `TEMPLATING_DESIGN.md` §6.3 is run **before** training
 and its result reported alongside technique accuracy. If a trivial classifier can
@@ -493,7 +497,7 @@ explicit scope revision, not an in-flight decision.
 | Training runs | Single training run — no hyperparameter sweep, no retraining |
 | Compute | Kaggle GPU |
 | Data spine | VERIS Community Database (VCDB) |
-| RAG corpus | MITRE ATT&CK Enterprise, used for retrieval at inference only |
+| ATT&CK corpus | MITRE ATT&CK Enterprise 19.2 — authority for technique IDs and names during labelling. **RAG: future scope, not implemented.** |
 | Posture | Defensive analysis only |
 
 Notes on the consequences of these constraints, so they are not relitigated later:
@@ -502,7 +506,7 @@ Notes on the consequences of these constraints, so they are not relitigated late
   output spec caps section lengths (§3) — input plus output must fit one sequence.
 - A single training run means the baseline evaluation must be run *before* training, as
   there is no budget to redo it.
-- ATT&CK is a retrieval corpus, not training data. Technique text is not fine-tuned into
-  the model, so technique-ID accuracy is expected to be the metric most improved by RAG.
+- ATT&CK technique text is neither training data nor retrieved at inference. It is used
+  only to validate the IDs and names in `labels/technique_lookup.yaml`.
 - VCDB records are the source of ground-truth severity and technique labels; where a
   VCDB record lacks an ATT&CK mapping, the record is excluded rather than guessed.

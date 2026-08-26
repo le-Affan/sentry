@@ -1,3 +1,4 @@
+<!-- Last updated 2026-08-27. The section 6.3 leakage test FAILED; see section 7.1 and LIMITATIONS.md. -->
 # TEMPLATING DESIGN
 
 Design only. No generator code exists yet. This document decides how synthetic
@@ -198,7 +199,7 @@ not what this project measures.
 
 ---
 
-## 6. Verification before generating 1,000 pairs
+## 6. Verification before generating the pairs
 
 The mechanisms above are claims, and claims about a generator can be checked. Before the
 full build, generate a pilot of ~100 blobs and confirm:

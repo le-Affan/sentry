@@ -256,7 +256,7 @@ def build_markdown(stats, dist, problems, cap, lut_rows):
     for k in sorted(tail, key=lambda x: dist[x]):
         W(f"- `{k[0]}` ({k[1]}): {dist[k]:,}")
     W("")
-    W("**Why this matters.** Sampling ~1,000 pairs proportionally would reproduce this")
+    W(f"**Why this matters.** Sampling {TARGET_PAIRS:,} pairs proportionally would reproduce this")
     W("skew. A model that answers with the majority technique unconditionally would score")
     W("well on technique accuracy while performing no analysis at all — and with a single")
     W("training run (SCOPE.md §6) there is no second attempt to correct for it.")
@@ -266,6 +266,11 @@ def build_markdown(stats, dist, problems, cap, lut_rows):
     if cap:
         cap_n, cap_total, cap_top = cap
         W(f"Cap each technique at **{cap_n} records** when sampling.")
+        W("")
+        W("*Note:* `src/select_records.py` uses a fixed `CLASS_CAP` of 205, set when the")
+        W(f"target was larger. At {TARGET_PAIRS} pairs the global largest-remainder")
+        W("apportionment does the balancing, so the cap only prevents one class from")
+        W("monopolising the candidate pool. The realised split is in `DATASET_STATS.md` §2.")
         W("")
         W("| Property | Uncapped | Capped at " + str(cap_n) + " |")
         W("|---|---|---|")
@@ -288,8 +293,8 @@ def build_markdown(stats, dist, problems, cap, lut_rows):
     W("1. **Floor rare classes.** Techniques with fewer than 20 records should either be")
     W("   included in full or dropped entirely — a class present with three examples")
     W("   teaches nothing and adds noise to per-class accuracy.")
-    W("2. **Stratify the train/test split by technique**, so the 100-record test set is not")
-    W("   accidentally all one class.")
+    W(f"2. **Stratify the train/test split by technique**, so the {c.N_TEST}-record")
+    W("   test set is not accidentally all one class.")
     W("3. **Report the majority-class baseline** alongside technique accuracy. Without it,")
     W("   the metric cannot be distinguished from guessing the most common label.")
     W("")

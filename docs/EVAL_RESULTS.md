@@ -1,3 +1,4 @@
+<!-- Last updated 2026-08-27. Generated file — Regenerate with `make eval`. -->
 # EVALUATION RESULTS
 
 `Qwen2.5-3B-Instruct` base vs the same model with the QLoRA adapter, on the

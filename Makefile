@@ -9,7 +9,7 @@ BIN     := $(VENV)/bin
 SCRATCH := .scratch
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-eval data data-vcdb data-attack survey labels select blobs pilot reports reports-pilot stats sft lint test clean clean-data
+.PHONY: help setup setup-eval data data-vcdb data-attack survey labels select blobs pilot reports reports-pilot stats sft eval lint test clean clean-data
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -75,6 +75,9 @@ stats:  ## Summarise the corpus; rewrites docs/DATASET_STATS.md
 
 sft:  ## Write train.jsonl / test.jsonl in Qwen chat format, token-checked
 	$(BIN)/python -m src.build_sft
+
+eval:  ## Score base vs tuned predictions; rewrites docs/EVAL_RESULTS.md
+	$(BIN)/python -m src.evaluate
 
 # --- quality --------------------------------------------------------------
 
