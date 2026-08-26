@@ -14,6 +14,12 @@ data/processed/*
 !data/interim/.gitkeep
 !data/processed/.gitkeep
 
+# Model predictions ARE tracked. Unlike the corpora, they are not regenerable
+# without a GPU -- reproducing them cost ~0.9h of Kaggle quota -- and they are
+# the evidence behind docs/EVAL_RESULTS.md. ~145 KB each.
+!data/processed/preds_base.jsonl
+!data/processed/preds_tuned.jsonl
+
 # ---------------------------------------------------------------------------
 # Model artifacts and run outputs
 # ---------------------------------------------------------------------------
