@@ -4,7 +4,10 @@
 # Fixed constraints (SCOPE.md section 6): Qwen2.5-3B-Instruct, 4-bit QLoRA,
 # max_seq_len 1024, single training run, Kaggle GPU.
 
-transformers>=4.44
+# Pin the major version: transformers 5 removed TrainingArguments.warmup_ratio
+# and renamed evaluation_strategy. src/train_qlora.py works on both, but pinning
+# keeps the Kaggle image from moving under a single non-repeatable training run.
+transformers>=4.44,<6
 peft>=0.12                # LoRA adapters
 trl>=0.9                  # SFTTrainer
 bitsandbytes>=0.43        # 4-bit NF4 quantization
