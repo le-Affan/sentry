@@ -9,7 +9,7 @@ BIN     := $(VENV)/bin
 SCRATCH := .scratch
 
 .DEFAULT_GOAL := help
-.PHONY: help setup setup-eval data data-vcdb data-attack survey labels select blobs pilot reports reports-pilot stats sft eval demo lint test clean clean-data
+.PHONY: help setup setup-eval data data-vcdb data-attack survey labels select blobs pilot reports reports-pilot stats sft eval blurbs demo lint test clean clean-data
 
 help:  ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
@@ -78,6 +78,9 @@ sft:  ## Write train.jsonl / test.jsonl in Qwen chat format, token-checked
 
 eval:  ## Score base vs tuned predictions; rewrites docs/EVAL_RESULTS.md
 	$(BIN)/python -m src.evaluate
+
+blurbs:  ## Verify every demo catalog blurb traces to its chain skeleton
+	$(BIN)/python -m src.check_blurbs
 
 demo:  ## Serve the local demo at http://127.0.0.1:8000
 	$(BIN)/uvicorn src.demo_api:app --port 8000

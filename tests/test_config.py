@@ -82,3 +82,14 @@ def test_lookup_confidence_values_are_known():
         assert r["confidence"] in ("high", "medium", "low"), r["veris_path"]
         assert r["attack_id"].startswith("T"), r["veris_path"]
         assert r["rationale"].strip(), r["veris_path"]
+
+
+def test_demo_blurbs_are_grounded_in_their_skeletons():
+    """Every demo catalog blurb must trace to its own chain's nodes.
+
+    Guards the failure mode that inspection misses: copy that sounds plausible
+    but describes something the chain never does. See src/check_blurbs.py.
+    """
+    from src.check_blurbs import main
+
+    assert main(verbose=False) == 0, "ungrounded blurb copy -- run `make blurbs`"

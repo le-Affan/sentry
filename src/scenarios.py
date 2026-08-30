@@ -71,6 +71,10 @@ def build_catalog():
     """All 40 test scenarios, each with a grounded label and description."""
     chains = yaml.safe_load(CHAINS.read_text(encoding="utf-8"))
     descriptors = {s["id"]: s["name"] for s in chains["skeletons"]}
+    # Optional plain-language copy for the demo catalog. A skeleton without it
+    # falls back to the derived form below, so the catalog always renders.
+    card_titles = {s["id"]: s["card_title"] for s in chains["skeletons"] if s.get("card_title")}
+    card_blurbs = {s["id"]: s["card_blurb"] for s in chains["skeletons"] if s.get("card_blurb")}
 
     lookup = yaml.safe_load(LOOKUP.read_text(encoding="utf-8"))
     technique_names = {r["attack_id"]: r["attack_name"] for r in lookup["techniques"]}
@@ -110,6 +114,15 @@ def build_catalog():
         else:
             description = f"Reference severity: {severity}."
 
+        # Catalog copy. Prefers the skeleton's authored plain-language version;
+        # otherwise derives a title and reuses the description above.
+        card_title = card_titles.get(skeleton)
+        if not card_title:
+            card_title = descriptor.title()
+            if primary:
+                card_title += f" on {primary.title()}"
+        card_blurb = card_blurbs.get(skeleton, description)
+
         out.append(
             {
                 "id": iid,
@@ -119,6 +132,9 @@ def build_catalog():
                 "skeleton": skeleton,
                 "label": label,
                 "description": description,
+                "card_title": card_title,
+                "card_blurb": card_blurb,
+                "has_plain_copy": skeleton in card_blurbs,
                 "severity": severity,
                 "asset_roles": roles,
                 "asset_hosts": hosts,

@@ -28,6 +28,11 @@
 #                 Anything not constrained here is free to move -- the templater
 #                 emits a random valid topological sort.
 #     noise:      how many benign events may be inserted (min, max)
+#     card_title: plain-language scenario title for the demo catalog. Optional --
+#                 falls back to a derived "<descriptor> on <role>" form.
+#     card_blurb: one plain sentence describing what this chain does, for a
+#                 reader who is not a security analyst. A restatement of this
+#                 skeleton's own node sequence -- no per-record content.
 #     notes:      analyst_notes text for this chain -- the control failure or
 #                 contributing factor THIS chain implies. Synthetic, and
 #                 deliberately so: the VCDB summary describes a different
@@ -86,6 +91,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Mass file modification rule fired on {srv}"}
     edges: [[mail, exec], [exec, c2], [exec, drop], [drop, persist], [persist, encrypt], [encrypt, detect]]
     noise: [1, 2]
+    card_title: "Phishing Email to Mass File Encryption"
+    card_blurb: "An emailed attachment caused an Office application to launch PowerShell, which dropped a file, installed a service, and rewrote files with an appended extension."
+    card_blurb_trace:
+      "emailed attachment": mail
+      "Office application to launch PowerShell": exec
+      "dropped a file": drop
+      "installed a service": persist
+      "rewrote files with an appended extension": encrypt
     notes: "Macro policy on {wks} was set to prompt-user rather than block, so the attachment ran on open."
 
   - id: t1486_edge_exploit_to_encrypt
@@ -101,6 +114,15 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Bulk file modification detected on {srv}"}
     edges: [[probe, exploit], [exploit, shell], [shell, cred], [cred, lateral], [lateral, encrypt], [encrypt, detect]]
     noise: [1, 2]
+    card_title: "Edge Server Breach to File Encryption"
+    card_blurb: "A crafted request to a web server opened a command interpreter, which used a service account to reach a server and rewrite files across its shares."
+    card_blurb_trace:
+      "crafted request": exploit
+      "web server": exploit
+      "opened a command interpreter": shell
+      "service account": cred
+      "reach a server": lateral
+      "rewrite files across its shares": encrypt
     notes: "{web} was two patch cycles behind; the service account it runs under also had write access to {srv}."
 
   - id: t1486_slow_burn
@@ -116,6 +138,16 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Ransom note file detected on {srv} by content inspection"}
     edges: [[vpn, exec], [dns, exec], [exec, reg], [reg, persist], [persist, encrypt], [encrypt, detect]]
     noise: [1, 2]
+    card_title: "Slow-Burn Ransomware via VPN"
+    card_blurb: "An account signed in through the VPN gateway and ran an unsigned binary that added a run key; days after initial access, files were encrypted across a server and its mapped shares and a ransom note appeared."
+    card_blurb_trace:
+      "An account": vpn
+      "signed in through the VPN gateway": vpn
+      "ran an unsigned binary": exec
+      "added a run key": reg
+      "days after initial access": persist
+      "files were encrypted across a server and its mapped shares": encrypt
+      "ransom note": detect
     notes: "VPN access for {user} was not covered by MFA, and the dwell time went unnoticed because no baseline existed for new outbound domains."
 
   - id: t1486_backup_first
@@ -146,6 +178,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Suspicious Office child process rule fired on {wks}"}
     edges: [[mail, exec], [exec, c2], [exec, drop], [drop, detect]]
     noise: [1, 2]
+    card_title: "Malicious Attachment Opened on Workstation"
+    card_blurb: "A macro in an emailed attachment launched a script interpreter, which opened an outbound connection and wrote a file to the workstation."
+    card_blurb_trace:
+      "macro in an emailed attachment": exec
+      "attachment": mail
+      "launched a script interpreter": exec
+      "opened an outbound connection": c2
+      "wrote a file to the workstation": drop
     notes: "Attachments from external senders are not detonated in a sandbox before delivery."
 
   - id: t1566_credential_harvest
@@ -159,6 +199,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Impossible-travel rule fired for {user}"}
     edges: [[mail, dns], [dns, visit], [visit, reuse], [reuse, detect]]
     noise: [1, 2]
+    card_title: "Fake Login Page Harvested Credentials"
+    card_blurb: "A link in an email led to a page on a domain registered within the last week, and the account was later used to sign in to the mail portal from a previously unseen location."
+    card_blurb_trace:
+      "link in an email": mail
+      "page on a domain": visit
+      "registered within the last week": dns
+      "account was later used to sign in to the mail portal from a previously unseen location": reuse
     notes: "Mail filtering does not rewrite links, so the newly registered domain was reachable from {wks}."
 
   - id: t1566_reported_not_clicked
@@ -171,6 +218,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Mail gateway retro-quarantined all messages from {domain}"}
     edges: [[mail1, report], [report, mail2], [mail2, detect]]
     noise: [1, 2]
+    card_title: "Phishing Reported Before Anyone Clicked"
+    card_blurb: "An employee reported a suspicious attachment without opening it; a second wave reached more recipients before the mail gateway retro-quarantined the messages."
+    card_blurb_trace:
+      "employee": report
+      "reported a suspicious attachment without opening it": report
+      "attachment": mail1
+      "second wave reached more recipients": mail2
+      "mail gateway retro-quarantined the messages": detect
     notes: "The user reported promptly, but the gateway had no rule to retro-quarantine already-delivered copies until an analyst acted."
 
   - id: t1566_thread_hijack
@@ -184,6 +239,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Anomalous authentication sequence flagged for {user}"}
     edges: [[mail, exec], [exec, fail], [fail, ok], [ok, detect]]
     noise: [1, 2]
+    card_title: "Hijacked Email Thread from Partner"
+    card_blurb: "A reply in an existing email thread came from a compromised partner address; its attachment spawned a script interpreter, and a credential prompt was rejected twice before succeeding on the third attempt."
+    card_blurb_trace:
+      "reply in an existing email thread": mail
+      "compromised partner address": mail
+      "attachment spawned a script interpreter": exec
+      "credential prompt was rejected twice": fail
+      "succeeding on the third attempt": ok
     notes: "Replies from known partner addresses skip attachment scanning, which the hijacked thread exploited."
 
   # =========================================================================
@@ -200,6 +263,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Web shell signature matched {path} on {web}"}
     edges: [[req, write], [write, exec], [exec, beacon], [beacon, detect]]
     noise: [1, 2]
+    card_title: "Web Shell Planted on Public Server"
+    card_blurb: "A malformed request wrote a file into the web root, and the web service account spawned a shell that called out to an outside address."
+    card_blurb_trace:
+      "malformed request": req
+      "wrote a file into the web root": write
+      "web service account spawned a shell": exec
+      "called out to an outside address": beacon
     notes: "The web root on {web} is writable by the service account, so an upload became a persistent shell."
 
   - id: t1190_injection_to_read
@@ -214,6 +284,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Outbound volume anomaly flagged on {web}"}
     edges: [[probe, waf], [waf, bypass], [bypass, read], [read, exfil], [exfil, detect]]
     noise: [1, 2]
+    card_title: "Database Read Through Injected Query"
+    card_blurb: "Requests containing SQL syntax were blocked by the web application firewall until an encoded request returned a large response body, and rows were exported from the application database."
+    card_blurb_trace:
+      "Requests containing SQL syntax": probe
+      "blocked by the web application firewall": waf
+      "encoded request returned a large response body": bypass
+      "rows were exported from the application database": read
     notes: "The WAF was in monitor-only mode for encoded payloads, and the application account could read the full table rather than a scoped view."
 
   - id: t1190_exploit_to_lateral
@@ -241,6 +318,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Exploit signature matched against {web}"}
     edges: [[scan1, hit], [scan2, hit], [hit, exec], [exec, detect]]
     noise: [1, 2]
+    card_title: "Web Server Scanned, Then Exploited"
+    card_blurb: "A web server was port-scanned and fingerprinted, then received a request matching a known exploit signature, and a process started on it outside the deployment window."
+    card_blurb_trace:
+      "web server was port-scanned": scan1
+      "fingerprinted": scan2
+      "received a request matching a known exploit signature": hit
+      "process started on it outside the deployment window": exec
     notes: "Perimeter scanning against {web} generated alerts for days without triage, so the exploit followed an ignored warning."
 
   # =========================================================================
@@ -257,6 +341,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Data loss prevention rule flagged egress from {srv}"}
     edges: [[far, near], [near, read], [read, exfil], [exfil, detect]]
     noise: [1, 2]
+    card_title: "Same Account, Two Impossible Locations"
+    card_blurb: "One account signed in from outside any office region and again minutes later, read files from a restricted share, and uploaded them."
+    card_blurb_trace:
+      "account signed in from outside any office region": far
+      "again minutes later": near
+      "read files from a restricted share": read
+      "uploaded them": exfil
     notes: "Conditional access allows logon from any geography, and {user} reused a password exposed in an unrelated breach."
 
   - id: t1078_service_account_abuse
@@ -269,6 +360,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Service account interactive logon rule fired on {srv}"}
     edges: [[login, conn], [login, read], [read, detect]]
     noise: [1, 2]
+    card_title: "Batch Account Used Interactively"
+    card_blurb: "A service account configured for batch use only logged on interactively, opened an outbound session, and read files from the server."
+    card_blurb_trace:
+      "service account configured for batch use only": login
+      "logged on interactively": login
+      "opened an outbound session": conn
+      "read files from the server": read
     notes: "{svc} was configured for batch use but never denied interactive logon rights."
 
   - id: t1078_dormant_revival
@@ -282,6 +380,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Dormant account activity rule fired for {user}"}
     edges: [[wake, reg], [wake, second], [second, read], [read, detect]]
     noise: [1, 2]
+    card_title: "Dormant Account Reactivated"
+    card_blurb: "An account that had been inactive was used to sign in again, write a persistence key on the workstation, and read documents from a server."
+    card_blurb_trace:
+      "account that had been inactive": wake
+      "sign in again": wake
+      "write a persistence key on the workstation": reg
+      "read documents from a server": read
     notes: "The joiner-mover-leaver process does not disable accounts after inactivity, leaving {user} live and unmonitored."
 
   - id: t1078_stuffing_survivor
@@ -294,6 +399,12 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Successful logon following a failure burst flagged for {user}"}
     edges: [[fail, ok], [ok, pivot], [pivot, detect]]
     noise: [1, 2]
+    card_title: "One Password Guess Out of Many Worked"
+    card_blurb: "After a burst of failed logons across multiple accounts, one succeeded, and that account then reached a server."
+    card_blurb_trace:
+      "burst of failed logons across multiple accounts": fail
+      "one succeeded": ok
+      "account then reached a server": pivot
     notes: "No rate limiting on the external logon endpoint, and {user} had no second factor."
 
   # =========================================================================
@@ -309,6 +420,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "{web} marked unavailable by external monitoring"}
     edges: [[spike, alert1], [alert1, sustain], [sustain, detect]]
     noise: [1, 2]
+    card_title: "Sustained Traffic Flood Took Site Offline"
+    card_blurb: "Inbound traffic from distributed sources exceeded the bandwidth threshold on the perimeter link and was sustained for hours until the web server was marked unavailable."
+    card_blurb_trace:
+      "Inbound traffic from distributed sources": spike
+      "exceeded the bandwidth threshold on the perimeter link": alert1
+      "sustained for hours": sustain
+      "web server was marked unavailable": detect
     notes: "No upstream scrubbing arrangement with the provider, so link saturation could not be mitigated in-path."
 
   - id: t1498_application_layer
@@ -321,6 +439,12 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "{web} health check failing continuously"}
     edges: [[reqs, latency], [latency, pool], [pool, detect]]
     noise: [1, 2]
+    card_title: "Expensive Endpoint Overwhelmed"
+    card_blurb: "Requests per minute to a single expensive endpoint pushed response latency past its service objective and exhausted the connection pool."
+    card_blurb_trace:
+      "Requests per minute to a single expensive endpoint": reqs
+      "response latency past its service objective": latency
+      "exhausted the connection pool": pool
     notes: "The expensive endpoint on {web} has no per-client rate limit or caching layer."
 
   - id: t1498_dos_as_cover
@@ -334,6 +458,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Retrospective review flagged the {srv} access during the outage window"}
     edges: [[flood, alert1], [alert1, auth], [auth, read], [read, detect]]
     noise: [1, 2]
+    card_title: "Outage Used as Cover for Data Access"
+    card_blurb: "A traffic flood saturated the perimeter and engaged the response team, while a service account authenticated to a server and read records during the outage window."
+    card_blurb_trace:
+      "traffic flood saturated the perimeter": flood
+      "engaged the response team": alert1
+      "service account authenticated to a server": auth
+      "read records": read
+      "during the outage window": detect
     notes: "Alert triage was single-threaded; while the availability incident held attention, authentication alerts on {srv} queued unreviewed."
 
   # =========================================================================
@@ -360,6 +492,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Campaign against {n_files} recipients identified by the mail gateway"}
     edges: [[mail, visit], [visit, nofill], [nofill, detect]]
     noise: [1, 2]
+    card_title: "Fake IT Helpdesk Credential Request"
+    card_blurb: "A message impersonating internal IT led to a credential form, but browser isolation blocked the submission; the campaign was identified by the mail gateway."
+    card_blurb_trace:
+      "message impersonating internal IT": mail
+      "credential form": visit
+      "browser isolation blocked the submission": nofill
+      "campaign was identified by the mail gateway": detect
     notes: "Internal IT communications are unsigned, so an impersonating sender was indistinguishable to {user}."
 
   - id: t1598_recon_survey
@@ -398,6 +537,12 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Brute force rule fired for {srv}"}
     edges: [[probe, fail], [fail, lock], [lock, detect]]
     noise: [1, 2]
+    card_title: "Remote Login Hammered Until Lockout"
+    card_blurb: "An outside host made repeated connections to a server and failed logons for hours until an account hit its lockout threshold."
+    card_blurb_trace:
+      "outside host made repeated connections to a server": probe
+      "failed logons for hours": fail
+      "account hit its lockout threshold": lock
     notes: "{srv} exposes remote desktop directly to the internet with no gateway or source restriction."
 
   - id: t1110_stuffing_wave
@@ -410,6 +555,12 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Credential stuffing campaign confirmed against {web}"}
     edges: [[wave, rate], [rate, rotate], [rotate, detect]]
     noise: [1, 2]
+    card_title: "Login Flood Against Customer Portal"
+    card_blurb: "Login attempts against the customer portal engaged the rate limiter, then resumed from a different source range."
+    card_blurb_trace:
+      "Login attempts against the customer portal": wave
+      "engaged the rate limiter": rate
+      "resumed from a different source range": rotate
     notes: "Rate limiting on {web} keys on source address alone, so rotating ranges defeated it."
 
   # =========================================================================
@@ -436,6 +587,14 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Covert channel suspected from {wks}"}
     edges: [[q, vol], [vol, conn], [conn, detect]]
     noise: [1, 2]
+    card_title: "Data Smuggled Out Over DNS"
+    card_blurb: "A workstation issued an unusual volume of DNS queries for long subdomains — a covert channel to an outside host."
+    card_blurb_trace:
+      "workstation issued": q
+      "DNS queries for long subdomains": q
+      "unusual volume": vol
+      "covert channel": detect
+      "outside host": conn
     notes: "Internal hosts resolve external names directly rather than through a monitored forwarder."
 
   - id: t1071_webmail_c2
@@ -489,6 +648,13 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Unscheduled bulk export flagged on {srv}"}
     edges: [[auth, read], [read, write], [write, move], [move, detect]]
     noise: [1, 2]
+    card_title: "Database Export from Workstation"
+    card_blurb: "A service account exported an entire database table and copied it onto removable media, outside the scheduled maintenance window."
+    card_blurb_trace:
+      "service account": auth
+      "exported an entire database table": read
+      "copied it onto removable media": move
+      "outside the scheduled maintenance window": detect
     notes: "{svc} holds full export rights on {srv}, and bulk exports are not alerted outside the maintenance window."
 
   # =========================================================================
@@ -516,6 +682,12 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Browser injection rule fired on {wks}"}
     edges: [[proc, cap], [cap, send], [send, detect]]
     noise: [1, 2]
+    card_title: "Browser Form Data Stolen"
+    card_blurb: "An unsigned module was injected into the browser, captured form data, and posted it to an outside address."
+    card_blurb_trace:
+      "unsigned module was injected into the browser": proc
+      "captured form data": cap
+      "posted it to an outside address": send
     notes: "No module-signing enforcement in the browser on {wks}."
 
   - id: t1056_admin_target
@@ -528,4 +700,11 @@ skeletons:
       - {ref: detect, event_type: alert, terminal: true, desc: "Unexpected service and file pair flagged on {wks}"}
     edges: [[install, wait], [wait, cap], [cap, detect]]
     noise: [1, 2]
+    card_title: "Credential Capture During Admin Login"
+    card_blurb: "A service installed on a workstation captured credential material when an administrator logged on for routine maintenance."
+    card_blurb_trace:
+      "service installed on a workstation": install
+      "captured credential material": cap
+      "administrator": notes
+      "logged on for routine maintenance": wait
     notes: "Administrators log on interactively to user endpoints such as {wks} instead of using a privileged access workstation."
