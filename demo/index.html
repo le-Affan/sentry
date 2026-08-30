@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentry — Telemetry to Incident Report</title>
+<style>
+:root{
+  --bg:#000; --panel:#0b0b0b; --panel-2:#121212; --raised:#161616;
+  --line:#242424; --line-strong:#3a3a3a;
+  --dim:#6e6e6e; --mid:#9a9a9a; --text:#cfcfcf; --bright:#fff;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,"Liberation Mono",monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:var(--mono);font-size:13px;line-height:1.6;
+  -webkit-font-smoothing:antialiased;
+}
+::selection{background:#2a2a2a;color:#fff}
+
+/* ---------- masthead ---------- */
+.masthead{
+  border-bottom:1px solid var(--line);background:var(--panel);
+  padding:14px 20px;display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;
+  position:sticky;top:0;z-index:20;
+}
+.brand{font-size:15px;letter-spacing:.22em;color:var(--bright);font-weight:700}
+.brand-sub{color:var(--dim);letter-spacing:.06em}
+.masthead .spacer{flex:1}
+.meta-chip{
+  border:1px solid var(--line);padding:3px 9px;color:var(--mid);
+  font-size:11px;letter-spacing:.05em;white-space:nowrap;
+}
+.meta-chip b{color:var(--text);font-weight:600}
+
+/* ---------- shell ---------- */
+.shell{display:grid;grid-template-columns:360px minmax(0,1fr);min-height:calc(100vh - 53px)}
+@media (max-width:1080px){.shell{grid-template-columns:1fr}}
+
+/* ---------- catalog ---------- */
+.catalog{
+  border-right:1px solid var(--line);background:var(--panel);
+  max-height:calc(100vh - 53px);overflow-y:auto;
+}
+@media (max-width:1080px){.catalog{max-height:none;border-right:none;border-bottom:1px solid var(--line)}}
+.catalog-head{
+  padding:14px 16px 10px;border-bottom:1px solid var(--line);
+  position:sticky;top:0;background:var(--panel);z-index:5;
+}
+.catalog-title{color:var(--bright);letter-spacing:.14em;font-size:11px}
+.catalog-count{color:var(--dim);font-size:11px;margin-top:3px}
+.filter{
+  width:100%;margin-top:10px;background:var(--bg);color:var(--text);
+  border:1px solid var(--line);padding:6px 8px;font-family:var(--mono);font-size:12px;
+}
+.filter:focus{outline:none;border-color:var(--line-strong)}
+.filter::placeholder{color:#4a4a4a}
+
+.group-head{
+  display:flex;align-items:baseline;gap:8px;
+  padding:14px 16px 6px;border-top:1px solid var(--line);
+  color:var(--mid);font-size:11px;letter-spacing:.1em;
+}
+.group-head:first-of-type{border-top:none}
+.group-id{color:var(--bright);font-weight:700}
+.group-n{margin-left:auto;color:var(--dim)}
+
+.card{
+  display:block;width:100%;text-align:left;background:transparent;
+  border:none;border-left:2px solid transparent;
+  padding:9px 16px 11px;cursor:pointer;color:inherit;
+  font-family:var(--mono);font-size:12px;line-height:1.5;
+}
+.card:hover{background:var(--panel-2);border-left-color:var(--line-strong)}
+.card[aria-current="true"]{background:var(--raised);border-left-color:var(--bright)}
+.card:focus-visible{outline:1px solid var(--line-strong);outline-offset:-1px}
+.card-top{display:flex;gap:8px;align-items:baseline}
+.card-tid{color:var(--bright);font-weight:700;font-size:11px}
+.card-sev{margin-left:auto;color:var(--dim);font-size:10px;letter-spacing:.08em}
+.card-label{color:var(--text);margin-top:2px}
+.card-desc{color:var(--dim);font-size:11px;margin-top:3px}
+
+/* ---------- workspace ---------- */
+.work{padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+.placeholder{
+  border:1px dashed var(--line);padding:40px 24px;color:var(--dim);
+  text-align:center;letter-spacing:.05em;
+}
+
+.panel{border:1px solid var(--line);background:var(--panel);min-width:0}
+.panel-head{
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  padding:9px 14px;border-bottom:1px solid var(--line);background:var(--panel-2);
+}
+.panel-title{color:var(--bright);font-size:11px;letter-spacing:.14em}
+.panel-note{color:var(--dim);font-size:11px}
+.panel-note b{color:var(--mid);font-weight:600}
+.panel-body{padding:14px}
+
+.blob-input{
+  width:100%;min-height:300px;resize:vertical;background:var(--bg);
+  color:var(--text);border:1px solid var(--line);padding:11px 12px;
+  font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre;overflow-x:auto;
+}
+.blob-input:focus{outline:none;border-color:var(--line-strong)}
+
+.actions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:0 14px 14px}
+.btn{
+  background:var(--bright);color:#000;border:1px solid var(--bright);
+  padding:8px 22px;font-family:var(--mono);font-size:12px;font-weight:700;
+  letter-spacing:.14em;cursor:pointer;
+}
+.btn:hover:not(:disabled){background:var(--text);border-color:var(--text)}
+.btn:disabled{background:transparent;color:var(--dim);border-color:var(--line);cursor:default}
+.btn-ghost{
+  background:transparent;color:var(--mid);border:1px solid var(--line);
+  padding:8px 16px;font-family:var(--mono);font-size:12px;letter-spacing:.1em;cursor:pointer;
+}
+.btn-ghost:hover{color:var(--text);border-color:var(--line-strong)}
+.status{color:var(--dim);font-size:11px;letter-spacing:.06em}
+.status[data-state="working"]{color:var(--text)}
+.status[data-state="working"]::after{content:"";animation:dots 1.2s steps(4,end) infinite}
+@keyframes dots{0%{content:""}25%{content:"."}50%{content:".."}75%{content:"..."}}
+
+/* ---------- split ---------- */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:1400px){.split{grid-template-columns:minmax(0,1fr)}}
+
+/* ---------- report ---------- */
+.report{padding:4px 18px 20px;max-width:78ch}
+.rsec{padding:16px 0;border-bottom:1px solid var(--line)}
+.rsec:last-child{border-bottom:none;padding-bottom:4px}
+.rsec-h{
+  color:var(--bright);font-size:11px;letter-spacing:.18em;font-weight:700;
+  margin:0 0 9px;display:flex;align-items:baseline;gap:9px;
+}
+.rsec-h::before{content:attr(data-n);color:var(--dim);font-weight:400;letter-spacing:0}
+.rsec-b{color:var(--text);white-space:pre-wrap;word-break:break-word}
+.rsec-b .li{padding-left:16px;text-indent:-16px}
+.verdict{color:var(--bright);font-weight:700}
+
+.raw{
+  margin:0;padding:14px;white-space:pre-wrap;word-break:break-word;
+  color:var(--mid);font-size:12px;line-height:1.55;max-height:420px;overflow:auto;
+}
+details.raw-wrap{border-top:1px solid var(--line)}
+details.raw-wrap summary{
+  padding:9px 14px;color:var(--dim);font-size:11px;letter-spacing:.1em;cursor:pointer;
+}
+details.raw-wrap summary:hover{color:var(--text)}
+
+.error{border:1px solid var(--line-strong);background:var(--panel-2)}
+.error .panel-head{border-bottom-color:var(--line-strong)}
+.error-code{color:var(--bright);font-weight:700}
+.error-body{padding:14px;color:var(--text);white-space:pre-wrap}
+.pre-blob{white-space:pre;overflow-x:auto;color:var(--mid);font-size:12px;margin:0;padding:14px;max-height:520px;overflow-y:auto}
+</style>
+</head>
+<body>
+
+<header class="masthead">
+  <span class="brand">SENTRY</span>
+  <span class="brand-sub">telemetry → incident report</span>
+  <span class="spacer"></span>
+  <span class="meta-chip" id="chip-model">model <b>—</b></span>
+  <span class="meta-chip" id="chip-mode">mode <b>—</b></span>
+</header>
+
+<div class="shell">
+  <nav class="catalog" aria-label="Scenario catalog">
+    <div class="catalog-head">
+      <div class="catalog-title">SCENARIO CATALOG</div>
+      <div class="catalog-count" id="cat-count">loading…</div>
+      <input class="filter" id="filter" placeholder="filter by technique, label, host…" aria-label="Filter scenarios">
+    </div>
+    <div id="groups"></div>
+  </nav>
+
+  <main class="work">
+    <div class="placeholder" id="placeholder">
+      SELECT A SCENARIO FROM THE CATALOG<br>
+      <span style="color:#4a4a4a">or paste your own telemetry blob after selecting one</span>
+    </div>
+
+    <section class="panel" id="input-panel" hidden>
+      <div class="panel-head">
+        <span class="panel-title">TELEMETRY INPUT</span>
+        <span class="panel-note" id="input-note"></span>
+      </div>
+      <div class="panel-body">
+        <textarea class="blob-input" id="blob" spellcheck="false" aria-label="Telemetry blob"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn" id="analyze">ANALYZE</button>
+        <button class="btn-ghost" id="reset" hidden>RESET</button>
+        <span class="status" id="status"></span>
+      </div>
+    </section>
+
+    <div id="out"></div>
+  </main>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let CATALOG = {}, CURRENT = null;
+
+const esc = (s) => s.replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
+
+async function api(path, opts) {
+  const res = await fetch(path, opts);
+  let data = null;
+  try { data = await res.json(); } catch (_) { /* non-JSON body */ }
+  if (!res.ok) {
+    const detail = (data && data.detail) || res.statusText || 'Request failed';
+    const err = new Error(detail); err.status = res.status; throw err;
+  }
+  return data;
+}
+
+/* ---------- catalog ---------- */
+function renderCatalog(groups) {
+  $('groups').innerHTML = groups.map(g => `
+    <div class="group" data-tid="${g.technique_id}">
+      <div class="group-head">
+        <span class="group-id">${esc(g.technique_id)}</span>
+        <span>${esc(g.technique_name)}</span>
+        <span class="group-n">${g.scenarios.length}</span>
+      </div>
+      ${g.scenarios.map(s => `
+        <button class="card" data-id="${s.id}"
+                data-hay="${esc((s.technique_id+' '+s.label+' '+s.description+' '+s.asset_hosts.join(' ')).toLowerCase())}">
+          <span class="card-top">
+            <span class="card-tid">${esc(s.technique_id)}</span>
+            <span class="card-sev">${esc(s.severity.toUpperCase())}</span>
+          </span>
+          <span class="card-label">${esc(s.descriptor)}</span>
+          <span class="card-desc">${esc(s.description)}</span>
+        </button>`).join('')}
+    </div>`).join('');
+
+  document.querySelectorAll('.card').forEach(el =>
+    el.addEventListener('click', () => select(el.dataset.id)));
+}
+
+function select(id) {
+  const s = CATALOG[id];
+  if (!s) return;
+  CURRENT = s;
+  document.querySelectorAll('.card').forEach(el =>
+    el.setAttribute('aria-current', String(el.dataset.id === id)));
+  $('placeholder').hidden = true;
+  $('input-panel').hidden = false;
+  $('blob').value = s.blob;
+  $('input-note').innerHTML =
+    `<b>${esc(s.technique_id)}</b> · ${esc(s.label)} · ${s.blob_tokens} tokens`;
+  $('reset').hidden = true;
+  $('out').innerHTML = '';
+  setStatus('');
+  $('input-panel').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function setStatus(text, state) {
+  const el = $('status');
+  el.textContent = text;
+  if (state) el.dataset.state = state; else delete el.dataset.state;
+}
+
+/* ---------- report rendering ---------- */
+function renderBody(heading, body) {
+  const lines = body.split('\n').map(l => {
+    const t = esc(l);
+    if (/^\s*[-*]\s+/.test(l) || /^\s*\d+\.\s+/.test(l)) return `<span class="li">${t}</span>`;
+    return t;
+  });
+  let html = lines.join('\n');
+  if (heading === 'Severity' || heading === 'Attack Technique') {
+    html = html.replace(/^([^\n—-]+)/, '<span class="verdict">$1</span>');
+  }
+  return html;
+}
+
+function renderReport(payload) {
+  const secs = payload.sections.map((s, i) => `
+    <div class="rsec">
+      <h3 class="rsec-h" data-n="${String(i+1).padStart(2,'0')}">${esc(s.heading.toUpperCase())}</h3>
+      <div class="rsec-b">${renderBody(s.heading, s.body)}</div>
+    </div>`).join('');
+
+  const missing = payload.missing_sections.length
+    ? `<span class="panel-note">missing: <b>${payload.missing_sections.join(', ')}</b></span>` : '';
+
+  $('out').innerHTML = `
+    <div class="split">
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-title">GENERATED REPORT</span>
+          <span class="panel-note">fine-tuned · <b>${esc(payload.technique_id)}</b></span>
+          ${missing}
+        </div>
+        <div class="report">${secs}</div>
+        <details class="raw-wrap">
+          <summary>RAW MARKDOWN</summary>
+          <pre class="raw">${esc(payload.report_markdown)}</pre>
+        </details>
+      </section>
+      <section class="panel">
+        <div class="panel-head">
+          <span class="panel-title">REFERENCE REPORT</span>
+          <span class="panel-note">target used in training</span>
+        </div>
+        <pre class="raw">${esc(payload.reference_markdown)}</pre>
+      </section>
+    </div>`;
+  $('out').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function renderError(err) {
+  $('out').innerHTML = `
+    <section class="panel error">
+      <div class="panel-head">
+        <span class="panel-title">REQUEST FAILED</span>
+        <span class="panel-note error-code">HTTP ${err.status || '—'}</span>
+      </div>
+      <div class="error-body">${esc(err.message)}</div>
+    </section>`;
+  $('out').scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+/* ---------- actions ---------- */
+$('analyze').addEventListener('click', async () => {
+  if (!CURRENT) return;
+  const edited = $('blob').value.trim() !== CURRENT.blob.trim();
+  $('reset').hidden = !edited;
+  $('analyze').disabled = true;
+  setStatus('generating report', 'working');
+  $('out').innerHTML = '';
+  const t0 = performance.now();
+  try {
+    const body = edited ? {blob: $('blob').value} : {scenario_id: CURRENT.id};
+    const payload = await api('/api/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+    });
+    renderReport(payload);
+    setStatus(`complete · ${payload.sections.length}/6 sections · ${Math.round(performance.now()-t0)}ms`);
+  } catch (err) {
+    renderError(err);
+    setStatus('failed');
+  } finally {
+    $('analyze').disabled = false;
+  }
+});
+
+$('reset').addEventListener('click', () => { if (CURRENT) select(CURRENT.id); });
+
+$('filter').addEventListener('input', (e) => {
+  const q = e.target.value.trim().toLowerCase();
+  document.querySelectorAll('.card').forEach(el => {
+    el.style.display = !q || el.dataset.hay.includes(q) ? '' : 'none';
+  });
+  document.querySelectorAll('.group').forEach(g => {
+    const any = [...g.querySelectorAll('.card')].some(c => c.style.display !== 'none');
+    g.style.display = any ? '' : 'none';
+  });
+});
+
+/* ---------- boot ---------- */
+(async function boot() {
+  try {
+    const meta = await api('/api/meta');
+    $('chip-model').innerHTML = `model <b>${esc(meta.model.split('/').pop())}</b>`;
+    $('chip-mode').innerHTML = `mode <b>${esc(meta.inference_mode)}</b>`;
+    $('chip-mode').title = meta.note;
+
+    const data = await api('/api/scenarios');
+    data.groups.forEach(g => g.scenarios.forEach(s => { CATALOG[s.id] = s; }));
+    $('cat-count').textContent = `${data.count} scenarios · ${data.groups.length} techniques`;
+    renderCatalog(data.groups);
+  } catch (err) {
+    $('cat-count').textContent = 'failed to load';
+    renderError(err);
+  }
+})();
+</script>
+</body>
+</html>

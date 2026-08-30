@@ -24,6 +24,10 @@ tokenizers>=0.19
 # --- RAG index ------------------------------------------------------------
 scikit-learn>=1.5         # TF-IDF baseline retrieval over the ATT&CK corpus
 
+# --- local demo (src/demo_api.py) ---
+fastapi>=0.110
+uvicorn[standard]>=0.27
+
 # --- dev ------------------------------------------------------------------
 ruff>=0.6
 pytest>=8.0

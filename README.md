@@ -63,9 +63,25 @@ make setup-eval && make eval
 Full instructions, including credentials and the GPU stages, are in
 [docs/REPRODUCE.md](docs/REPRODUCE.md).
 
+## Demo
+
+A local web UI for browsing the 40 test scenarios and their generated reports.
+
+```sh
+make demo         # then open http://127.0.0.1:8000
+```
+
+Reports are real fine-tuned-model output, generated on a Kaggle Tesla T4 and
+committed to this repository (`data/processed/preds_tuned.jsonl`). The demo serves
+those — it does not run the model, so it needs no GPU and no downloads. A blob that
+differs from a known scenario returns HTTP 501 rather than a fabricated answer;
+regenerating predictions for new telemetry requires the Kaggle path in
+[docs/REPRODUCE.md](docs/REPRODUCE.md) §6.
+
 ## Layout
 
 ```
+demo/         Single-file static frontend for the local demo.
 docs/         All documentation. Start at PROJECT_OVERVIEW.md.
 labels/       Our labelling decisions, version-controlled as data.
 src/          All logic. Run as modules: python -m src.<name>
